@@ -1,0 +1,7 @@
+[package]
+name = "palantir"
+version = "0.1.0"
+authors = ["Robin Appelman <robin@icewind.nl>"]
+edition = "2018"
+
+[dependencies]
