@@ -1,19 +1,18 @@
+use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
+use futures_util::future;
 use futures_util::stream::{Stream, StreamExt};
-use futures_util::{future, TryStreamExt};
+use heim::sensors::TemperatureSensor;
 use heim::units::{information, ratio, thermodynamic_temperature};
+use parse_display::Display;
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Display)]
+#[display(style = "lowercase")]
 pub enum TemperatureLabel {
     CPU,
-}
-
-#[derive(Debug, Clone)]
-pub struct Temperature {
-    pub sensor: TemperatureLabel,
-    pub temperature: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -34,26 +33,28 @@ pub struct NetworkStats {
 pub struct Heim {}
 
 impl Heim {
-    #[allow(dead_code)]
-    pub async fn temperatures() -> Result<Vec<Temperature>> {
-        let mut temperatures = Vec::new();
-        let results: Vec<_> = heim::sensors::temperatures().try_collect().await?;
-        // let results: Vec<TemperatureSensor> = Vec::new();
-        // pin_mut!(results);
-        for sensor in results {
-            if let Some(temp) = match (sensor.unit(), sensor.label()) {
-                ("k10temp", Some("Tdie")) => Some(Temperature {
-                    sensor: TemperatureLabel::CPU,
-                    temperature: sensor
-                        .current()
-                        .get::<thermodynamic_temperature::degree_celsius>(),
-                }),
-                _ => None,
-            } {
-                temperatures.push(temp);
-            }
-        }
-        Ok(temperatures)
+    pub async fn temperatures(&self) -> Result<HashMap<TemperatureLabel, f32>> {
+        // ugly workaround problems between async-fs and tokio
+        let results = tokio::task::spawn_blocking(|| {
+            futures_lite::future::block_on(
+                heim::sensors::temperatures()
+                    .collect::<Vec<Result<TemperatureSensor, heim::Error>>>(),
+            )
+        })
+        .await
+        .wrap_err("Failed to resolve future")?
+        .into_iter()
+        .filter_map(|result| result.ok())
+        .filter_map(|sensor| match (sensor.unit(), sensor.label()) {
+            ("k10temp", Some("Tdie")) => Some((
+                TemperatureLabel::CPU,
+                sensor
+                    .current()
+                    .get::<thermodynamic_temperature::degree_celsius>(),
+            )),
+            _ => None,
+        });
+        Ok(results.collect())
     }
 
     pub async fn memory(&self) -> Result<Memory> {
