@@ -1,5 +1,5 @@
-use color_eyre::Result;
-use libzetta::zpool::{ZpoolEngine, ZpoolOpen3};
+use color_eyre::{Report, Result};
+use std::process::Command;
 use tokio::task::spawn_blocking;
 
 #[derive(Clone, Debug)]
@@ -9,33 +9,30 @@ pub struct ZfsPool {
     pub free: usize,
 }
 
-pub struct ZFS {
-    engine: ZpoolOpen3,
-}
-
-impl Default for ZFS {
-    fn default() -> Self {
-        ZFS {
-            engine: ZpoolOpen3::default(),
-        }
-    }
-}
+#[derive(Default)]
+pub struct ZFS;
 
 impl ZFS {
     pub async fn pools(self) -> Result<Vec<ZfsPool>> {
         spawn_blocking(move || {
-            let pools = self.engine.all()?;
-            pools
-                .into_iter()
-                .map(|pool| {
-                    let props = self.engine.read_properties(pool.name())?;
-                    Ok(ZfsPool {
-                        name: pool.name().to_string(),
-                        size: *props.size(),
-                        free: *props.size() * (*props.capacity() as usize) / 100,
+            let mut z = Command::new("zpool");
+            z.args(&["list", "-p", "-H", "-o", "name,size,free"]);
+            let out = z.output()?;
+            if out.status.success() {
+                let output = String::from_utf8(out.stdout)?;
+                Ok(output
+                    .lines()
+                    .flat_map(|line| {
+                        let mut parts = line.split_ascii_whitespace();
+                        let name = parts.next()?.to_string();
+                        let size = parts.next()?.parse().ok()?;
+                        let free = parts.next()?.parse().ok()?;
+                        Some(ZfsPool { name, size, free })
                     })
-                })
-                .collect()
+                    .collect())
+            } else {
+                Err(Report::msg(String::from_utf8(out.stderr)?))
+            }
         })
         .await?
     }

@@ -4,7 +4,7 @@ use futures_util::future;
 use futures_util::stream::{Stream, StreamExt};
 use heim::sensors::TemperatureSensor;
 use heim::units::{information, ratio, thermodynamic_temperature};
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::Lazy;
 use parse_display::Display;
 use regex::Regex;
 use std::collections::HashMap;
