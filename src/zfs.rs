@@ -1,4 +1,4 @@
-use color_eyre::{Report, Result};
+use color_eyre::Result;
 use std::process::Command;
 use tokio::task::spawn_blocking;
 
@@ -17,7 +17,10 @@ impl ZFS {
         spawn_blocking(move || {
             let mut z = Command::new("zpool");
             z.args(&["list", "-p", "-H", "-o", "name,size,free"]);
-            let out = z.output()?;
+            let out = match z.output() {
+                Ok(out) => out,
+                Err(_) => return Ok(Vec::new()),
+            };
             if out.status.success() {
                 let output = String::from_utf8(out.stdout)?;
                 Ok(output
@@ -31,7 +34,7 @@ impl ZFS {
                     })
                     .collect())
             } else {
-                Err(Report::msg(String::from_utf8(out.stderr)?))
+                Ok(Vec::new())
             }
         })
         .await?
