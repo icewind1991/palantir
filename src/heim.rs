@@ -133,6 +133,7 @@ impl Heim {
                 let name = partition.mount_point().to_string_lossy().to_string();
                 partition.usage().await.ok().map(|usage| (name, usage))
             })
+            .filter(|(mount_point, _usage)| future::ready(!mount_point.contains("/snap/")))
             .map(|(mount_point, usage)| DiskUsage {
                 name: mount_point,
                 size: usage.total().get::<information::byte>(),
