@@ -1,19 +1,13 @@
+use crate::heim::DiskUsage;
 use color_eyre::Result;
 use std::process::Command;
 use tokio::task::spawn_blocking;
-
-#[derive(Clone, Debug)]
-pub struct ZfsPool {
-    pub name: String,
-    pub size: usize,
-    pub free: usize,
-}
 
 #[derive(Default)]
 pub struct ZFS;
 
 impl ZFS {
-    pub async fn pools(self) -> Result<Vec<ZfsPool>> {
+    pub async fn pools(self) -> Result<Vec<DiskUsage>> {
         spawn_blocking(move || {
             let mut z = Command::new("zpool");
             z.args(&["list", "-p", "-H", "-o", "name,size,free"]);
@@ -30,7 +24,7 @@ impl ZFS {
                         let name = parts.next()?.to_string();
                         let size = parts.next()?.parse().ok()?;
                         let free = parts.next()?.parse().ok()?;
-                        Some(ZfsPool { name, size, free })
+                        Some(DiskUsage { name, size, free })
                     })
                     .collect())
             } else {

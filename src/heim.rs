@@ -2,6 +2,7 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
 use futures_util::future;
 use futures_util::stream::{Stream, StreamExt};
+use heim::disk::{FileSystem, Partition};
 use heim::sensors::TemperatureSensor;
 use heim::units::{information, ratio, thermodynamic_temperature};
 use once_cell::sync::Lazy;
@@ -29,6 +30,13 @@ pub struct IOStats {
     pub interface: String,
     pub bytes_sent: u64,
     pub bytes_received: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct DiskUsage {
+    pub name: String,
+    pub size: u64,
+    pub free: u64,
 }
 
 #[derive(Default)]
@@ -111,6 +119,24 @@ impl Heim {
                 interface: name,
                 bytes_sent: disk.write_bytes().get::<information::byte>(),
                 bytes_received: disk.read_bytes().get::<information::byte>(),
+            }))
+    }
+
+    pub async fn disk_usage(&self) -> Result<impl Stream<Item = DiskUsage>> {
+        Ok(heim::disk::partitions_physical()
+            .await?
+            .filter_map(|result| future::ready(result.ok()))
+            .filter(|partition: &Partition| {
+                future::ready(!partition.file_system().eq(&FileSystem::Zfs))
+            })
+            .filter_map(|partition: Partition| async move {
+                let name = partition.mount_point().to_string_lossy().to_string();
+                partition.usage().await.ok().map(|usage| (name, usage))
+            })
+            .map(|(mount_point, usage)| DiskUsage {
+                name: mount_point,
+                size: usage.total().get::<information::byte>(),
+                free: usage.free().get::<information::byte>(),
             }))
     }
 }

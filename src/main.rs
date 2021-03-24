@@ -1,8 +1,8 @@
-mod heim;
+pub mod heim;
 mod zfs;
 
-use crate::heim::{Heim, IOStats, Memory, TemperatureLabel};
-use crate::zfs::{ZfsPool, ZFS};
+use crate::heim::{DiskUsage, Heim, IOStats, Memory, TemperatureLabel};
+use crate::zfs::ZFS;
 use color_eyre::{Report, Result};
 use futures_util::stream::StreamExt;
 use futures_util::{pin_mut, try_join};
@@ -24,13 +24,14 @@ impl From<Report> for ReportRejection {
 impl Reject for ReportRejection {}
 
 async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
-    let (hostname, pools, cpu, memory, network, temperatures, disks): (
+    let (hostname, pools, cpu, memory, network, temperatures, disks, disk_usage): (
         String,
-        Vec<ZfsPool>,
+        Vec<DiskUsage>,
         f32,
         Memory,
         _,
         HashMap<TemperatureLabel, f32>,
+        _,
         _,
     ) = try_join! {
         heim.hostname(),
@@ -40,9 +41,11 @@ async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
         heim.network_stats(),
         heim.temperatures(),
         heim.disk_stats(),
+        heim.disk_usage(),
     }?;
     pin_mut!(network);
     pin_mut!(disks);
+    pin_mut!(disk_usage);
     let mut result = String::with_capacity(256);
     writeln!(&mut result, "cpu_usage{{host=\"{}\"}} {:.1}", hostname, cpu).ok();
     writeln!(
@@ -107,6 +110,23 @@ async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
                 &mut result,
                 "disk_received{{host=\"{}\", disk=\"{}\"}} {}",
                 hostname, disk.interface, disk.bytes_received
+            )
+            .ok();
+        }
+    }
+    while let Some(disk) = disk_usage.next().await {
+        let disk: DiskUsage = disk;
+        if disk.size > 0 {
+            writeln!(
+                &mut result,
+                "disk_size{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, disk.name, disk.size
+            )
+            .ok();
+            writeln!(
+                &mut result,
+                "disk_free{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, disk.name, disk.free
             )
             .ok();
         }
