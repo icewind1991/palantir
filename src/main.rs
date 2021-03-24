@@ -6,7 +6,7 @@ use crate::zfs::ZFS;
 use color_eyre::{Report, Result};
 use futures_util::stream::StreamExt;
 use futures_util::{pin_mut, try_join};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use warp::reject::Reject;
 use warp::{Filter, Rejection};
@@ -114,21 +114,25 @@ async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
             .ok();
         }
     }
+
+    let mut found_sizes = HashSet::new();
     while let Some(disk) = disk_usage.next().await {
         let disk: DiskUsage = disk;
         if disk.size > 0 {
-            writeln!(
-                &mut result,
-                "disk_size{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, disk.name, disk.size
-            )
-            .ok();
-            writeln!(
-                &mut result,
-                "disk_free{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, disk.name, disk.free
-            )
-            .ok();
+            if found_sizes.insert((disk.size, disk.free)) {
+                writeln!(
+                    &mut result,
+                    "disk_size{{host=\"{}\", disk=\"{}\"}} {}",
+                    hostname, disk.name, disk.size
+                )
+                .ok();
+                writeln!(
+                    &mut result,
+                    "disk_free{{host=\"{}\", disk=\"{}\"}} {}",
+                    hostname, disk.name, disk.free
+                )
+                .ok();
+            }
         }
     }
     for (label, temp) in temperatures {
