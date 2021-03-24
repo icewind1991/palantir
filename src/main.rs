@@ -1,7 +1,7 @@
 mod heim;
 mod zfs;
 
-use crate::heim::{Heim, Memory, NetworkStats, TemperatureLabel};
+use crate::heim::{Heim, IOStats, Memory, TemperatureLabel};
 use crate::zfs::{ZfsPool, ZFS};
 use color_eyre::{Report, Result};
 use futures_util::stream::StreamExt;
@@ -24,13 +24,14 @@ impl From<Report> for ReportRejection {
 impl Reject for ReportRejection {}
 
 async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
-    let (hostname, pools, cpu, memory, network, temperatures): (
+    let (hostname, pools, cpu, memory, network, temperatures, disks): (
         String,
         Vec<ZfsPool>,
         f32,
         Memory,
         _,
         HashMap<TemperatureLabel, f32>,
+        _,
     ) = try_join! {
         heim.hostname(),
         zfs.pools(),
@@ -38,8 +39,10 @@ async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
         heim.memory(),
         heim.network_stats(),
         heim.temperatures(),
+        heim.disk_stats(),
     }?;
     pin_mut!(network);
+    pin_mut!(disks);
     let mut result = String::with_capacity(256);
     writeln!(&mut result, "cpu_usage{{host=\"{}\"}} {:.1}", hostname, cpu).ok();
     writeln!(
@@ -75,8 +78,8 @@ async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
         .ok();
     }
     while let Some(network) = network.next().await {
+        let network: IOStats = network;
         if network.bytes_received > 0 || network.bytes_sent > 0 {
-            let network: NetworkStats = network;
             writeln!(
                 &mut result,
                 "net_sent{{host=\"{}\", network=\"{}\"}} {}",
@@ -87,6 +90,23 @@ async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
                 &mut result,
                 "net_received{{host=\"{}\", network=\"{}\"}} {}",
                 hostname, network.interface, network.bytes_received
+            )
+            .ok();
+        }
+    }
+    while let Some(disk) = disks.next().await {
+        let disk: IOStats = disk;
+        if disk.bytes_received > 0 && disk.bytes_sent > 0 {
+            writeln!(
+                &mut result,
+                "disk_sent{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, disk.interface, disk.bytes_sent
+            )
+            .ok();
+            writeln!(
+                &mut result,
+                "disk_received{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, disk.interface, disk.bytes_received
             )
             .ok();
         }

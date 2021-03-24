@@ -4,7 +4,9 @@ use futures_util::future;
 use futures_util::stream::{Stream, StreamExt};
 use heim::sensors::TemperatureSensor;
 use heim::units::{information, ratio, thermodynamic_temperature};
+use once_cell::sync::{Lazy, OnceCell};
 use parse_display::Display;
+use regex::Regex;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -23,7 +25,7 @@ pub struct Memory {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct NetworkStats {
+pub struct IOStats {
     pub interface: String,
     pub bytes_sent: u64,
     pub bytes_received: u64,
@@ -74,12 +76,12 @@ impl Heim {
         Ok((measurement_2 - measurement_1).get::<ratio::percent>() / cores as f32)
     }
 
-    pub async fn network_stats(&self) -> Result<impl Stream<Item = NetworkStats>> {
+    pub async fn network_stats(&self) -> Result<impl Stream<Item = IOStats>> {
         let networks = heim::net::io_counters().await?;
         Ok(networks
             .filter_map(|network| future::ready(network.ok()))
             .filter(|network| future::ready(network.interface().starts_with("enp")))
-            .map(|network| NetworkStats {
+            .map(|network| IOStats {
                 interface: network.interface().into(),
                 bytes_sent: network.bytes_sent().get::<information::byte>(),
                 bytes_received: network.bytes_recv().get::<information::byte>(),
@@ -88,5 +90,27 @@ impl Heim {
 
     pub async fn hostname(&self) -> Result<String> {
         Ok(heim::host::platform().await?.hostname().to_string())
+    }
+
+    pub async fn disk_stats(&self) -> Result<impl Stream<Item = IOStats>> {
+        static DISK_REGEX: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^([sv]d[a-z]+|nvme\dn\d)$").unwrap());
+        let disks = heim::disk::io_counters().await?;
+        Ok(disks
+            .filter_map(|disk| future::ready(disk.ok()))
+            .filter_map(|disk| {
+                future::ready(
+                    disk.device_name()
+                        .to_str()
+                        .map(str::to_string)
+                        .map(|name| (disk, name)),
+                )
+            })
+            .filter(|(_disk, name)| future::ready(DISK_REGEX.is_match(&name)))
+            .map(|(disk, name)| IOStats {
+                interface: name,
+                bytes_sent: disk.write_bytes().get::<information::byte>(),
+                bytes_received: disk.read_bytes().get::<information::byte>(),
+            }))
     }
 }

@@ -718,6 +718,7 @@ checksum = "b8a653442b9bdd11a77d3753a60443c60c4437d3acac8e6c3d4a6a9acd7cceed"
 dependencies = [
  "heim-common",
  "heim-cpu",
+ "heim-disk",
  "heim-host",
  "heim-memory",
  "heim-net",
@@ -760,6 +761,23 @@ dependencies = [
  "mach",
  "ntapi",
  "smol",
+ "winapi",
+]
+
+[[package]]
+name = "heim-disk"
+version = "0.1.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75603ff3868851c04954ee86bf610a6bd45be2732a0e81c35fd72b2b90fa4718"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "core-foundation",
+ "heim-common",
+ "heim-runtime",
+ "libc",
+ "mach",
+ "widestring",
  "winapi",
 ]
 
@@ -1245,7 +1263,9 @@ dependencies = [
  "futures-util",
  "heim",
  "libzetta",
+ "once_cell",
  "parse-display",
+ "regex",
  "tokio",
  "warp",
 ]
@@ -2159,6 +2179,12 @@ checksum = "0fcb14dea929042224824779fbc82d9fab8d2e6d3cbc0ac404de8edf489e77ff"
 dependencies = [
  "cc",
 ]
+
+[[package]]
+name = "widestring"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c168940144dd21fd8046987c16a46a33d5fc84eec29ef9dcddc2ac9e31526b7c"
 
 [[package]]
 name = "winapi"
