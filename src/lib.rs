@@ -11,13 +11,13 @@ use std::collections::HashSet;
 use std::fmt::Write;
 
 pub async fn get_metrics() -> Result<String> {
-    let (hostname, cpu, network, disks, disk_usage) = try_join! {
-        hostname(),
+    let (cpu, network, disks, disk_usage) = try_join! {
         cpu_time(),
         network_stats(),
         disk_stats(),
         disk_usage(),
     }?;
+    let hostname = hostname()?;
     let memory = memory()?;
     let temperatures = temperatures()?;
     let pools = pools();

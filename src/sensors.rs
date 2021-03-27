@@ -1,4 +1,4 @@
-use color_eyre::Result;
+use color_eyre::{Report, Result};
 use futures_util::future;
 use futures_util::stream::{Stream, StreamExt};
 use heim::cpu::time;
@@ -127,8 +127,10 @@ pub async fn network_stats() -> Result<impl Stream<Item = IOStats>> {
         }))
 }
 
-pub async fn hostname() -> Result<String> {
-    Ok(heim::host::platform().await?.hostname().to_string())
+pub fn hostname() -> Result<String> {
+    hostname::get()?
+        .into_string()
+        .map_err(|_| Report::msg("non utf8 hostname"))
 }
 
 pub async fn disk_stats() -> Result<impl Stream<Item = IOStats>> {
