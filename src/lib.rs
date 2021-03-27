@@ -1,4 +1,4 @@
-pub mod heim;
+pub(crate) mod heim;
 mod zfs;
 
 use crate::heim::*;
