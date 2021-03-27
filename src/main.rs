@@ -27,7 +27,7 @@ async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
     let (hostname, pools, cpu, memory, network, temperatures, disks, disk_usage): (
         String,
         Vec<DiskUsage>,
-        f32,
+        f64,
         Memory,
         _,
         HashMap<TemperatureLabel, f32>,
@@ -36,7 +36,7 @@ async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
     ) = try_join! {
         heim.hostname(),
         zfs.pools(),
-        heim.cpu_usage(),
+        heim.cpu_time(),
         heim.memory(),
         heim.network_stats(),
         heim.temperatures(),
@@ -47,7 +47,7 @@ async fn get_metrics(heim: Heim, zfs: ZFS) -> Result<String, ReportRejection> {
     pin_mut!(disks);
     pin_mut!(disk_usage);
     let mut result = String::with_capacity(256);
-    writeln!(&mut result, "cpu_usage{{host=\"{}\"}} {:.1}", hostname, cpu).ok();
+    writeln!(&mut result, "cpu_time{{host=\"{}\"}} {:.1}", hostname, cpu).ok();
     writeln!(
         &mut result,
         "memory_total{{host=\"{}\"}} {}",

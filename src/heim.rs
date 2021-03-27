@@ -2,15 +2,14 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
 use futures_util::future;
 use futures_util::stream::{Stream, StreamExt};
+use heim::cpu::time;
 use heim::disk::{FileSystem, Partition};
 use heim::sensors::TemperatureSensor;
-use heim::units::{information, ratio, thermodynamic_temperature};
+use heim::units::{information, thermodynamic_temperature, time};
 use once_cell::sync::Lazy;
 use parse_display::Display;
 use regex::Regex;
 use std::collections::HashMap;
-use std::time::Duration;
-use tokio::time::sleep;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Display)]
 #[display(style = "lowercase")]
@@ -76,12 +75,9 @@ impl Heim {
         })
     }
 
-    pub async fn cpu_usage(&self) -> Result<f32> {
-        let cores = heim::cpu::logical_count().await?;
-        let measurement_1 = heim::cpu::usage().await?;
-        sleep(Duration::from_millis(100)).await;
-        let measurement_2 = heim::cpu::usage().await?;
-        Ok((measurement_2 - measurement_1).get::<ratio::percent>() / cores as f32)
+    pub async fn cpu_time(&self) -> Result<f64> {
+        let time = time().await?;
+        Ok(time.user().get::<time::second>() + time.system().get::<time::second>())
     }
 
     pub async fn network_stats(&self) -> Result<impl Stream<Item = IOStats>> {
