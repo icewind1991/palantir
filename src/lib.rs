@@ -1,7 +1,8 @@
-pub mod heim;
+pub mod sensors;
 pub mod zfs;
 
-use crate::heim::*;
+use crate::sensors::temperatures;
+use crate::sensors::*;
 use crate::zfs::pools;
 use color_eyre::Result;
 use futures_util::stream::StreamExt;
@@ -10,15 +11,15 @@ use std::collections::HashSet;
 use std::fmt::Write;
 
 pub async fn get_metrics() -> Result<String> {
-    let (hostname, cpu, memory, network, temperatures, disks, disk_usage) = try_join! {
+    let (hostname, cpu, network, disks, disk_usage) = try_join! {
         hostname(),
         cpu_time(),
-        memory(),
         network_stats(),
-        temperatures(),
         disk_stats(),
         disk_usage(),
     }?;
+    let memory = memory()?;
+    let temperatures = temperatures()?;
     let pools = pools();
     pin_mut!(network);
     pin_mut!(disks);

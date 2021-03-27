@@ -1,6 +1,6 @@
 use iai::black_box;
 use palantir::get_metrics;
-use palantir::heim::temperatures;
+use palantir::sensors::temperatures;
 use palantir::zfs::pools;
 use tokio::runtime::Runtime;
 
@@ -14,8 +14,7 @@ fn iai_zfs_pool() {
 }
 
 fn iai_temperatures() {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async { black_box(temperatures().await).unwrap() });
+    black_box(temperatures()).unwrap();
 }
 
 iai::main!(iai_get_metrics, iai_zfs_pool, iai_temperatures);

@@ -1,15 +1,16 @@
-use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
 use futures_util::future;
 use futures_util::stream::{Stream, StreamExt};
 use heim::cpu::time;
 use heim::disk::{FileSystem, Partition};
-use heim::sensors::TemperatureSensor;
-use heim::units::{information, thermodynamic_temperature, time};
+use heim::units::{information, time};
 use once_cell::sync::Lazy;
 use parse_display::Display;
 use regex::Regex;
 use std::collections::HashMap;
+use std::fs::{read, read_dir, read_to_string, DirEntry, File};
+use std::io::{BufRead, BufReader};
+use std::os::unix::ffi::OsStrExt;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Display)]
 #[display(style = "lowercase")]
@@ -17,7 +18,7 @@ pub enum TemperatureLabel {
     CPU,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Memory {
     pub total: u64,
     pub free: u64,
@@ -38,36 +39,75 @@ pub struct DiskUsage {
     pub free: u64,
 }
 
-pub async fn temperatures() -> Result<HashMap<TemperatureLabel, f32>> {
-    // ugly workaround problems between async-fs and tokio
-    let results = tokio::task::spawn_blocking(|| {
-        futures_lite::future::block_on(
-            heim::sensors::temperatures().collect::<Vec<Result<TemperatureSensor, heim::Error>>>(),
+pub fn temperatures() -> Result<HashMap<TemperatureLabel, f32>> {
+    Ok(read_dir("/sys/class/hwmon")?
+        .filter_map(Result::ok)
+        .filter_map(|dir: DirEntry| {
+            let name = read(dir.path().join("name")).ok()?;
+            match name.as_slice() {
+                b"k10temp\n" => Some((name, dir)),
+                _ => None,
+            }
+        })
+        .flat_map(|(name, dir)| {
+            read_dir(dir.path())
+                .into_iter()
+                .flat_map(|dir| dir)
+                .filter_map(Result::ok)
+                .filter_map(move |item: DirEntry| {
+                    let file_name = item.file_name();
+                    let bytes = file_name.as_bytes();
+                    if bytes.starts_with(b"temp") && bytes.ends_with(b"_label") {
+                        let label = read(item.path()).ok()?;
+                        Some((name.clone(), label, item))
+                    } else {
+                        None
+                    }
+                })
+        })
+        .filter_map(
+            |(name, label, item)| match (name.as_slice(), label.as_slice()) {
+                (b"k10temp\n", b"Tdie\n") => Some((TemperatureLabel::CPU, item)),
+                _ => None,
+            },
         )
-    })
-    .await
-    .wrap_err("Failed to resolve future")?
-    .into_iter()
-    .filter_map(|result| result.ok())
-    .filter_map(|sensor| match (sensor.unit(), sensor.label()) {
-        ("k10temp", Some("Tdie")) => Some((
-            TemperatureLabel::CPU,
-            sensor
-                .current()
-                .get::<thermodynamic_temperature::degree_celsius>(),
-        )),
-        _ => None,
-    });
-    Ok(results.collect())
+        .filter_map(|(label, item)| {
+            let path = item.path().into_os_string();
+            Some((label, path.into_string().ok()?))
+        })
+        .filter_map(|(label, mut path)| {
+            path.truncate(path.len() - "label".len());
+            path.push_str("input");
+            let value = read_to_string(path).ok()?;
+            let parsed: u32 = value.trim().parse().ok()?;
+            Some((label, parsed as f32 / 1000.0))
+        })
+        .collect())
 }
 
-pub async fn memory() -> Result<Memory> {
-    let memory = heim::memory::memory().await?;
-    Ok(Memory {
-        total: memory.total().get::<information::byte>(),
-        free: memory.free().get::<information::byte>(),
-        available: memory.available().get::<information::byte>(),
-    })
+pub fn memory() -> Result<Memory> {
+    let mut meminfo = BufReader::new(File::open("/proc/meminfo")?);
+    let mut mem = Memory::default();
+    let mut line = String::new();
+    loop {
+        line.clear();
+        meminfo.read_line(&mut line)?;
+        if line.is_empty() {
+            break;
+        }
+        if let Some(line) = line.strip_suffix(" kB") {
+            if let Some(line_total) = line.strip_prefix("MemTotal: ") {
+                mem.total = line_total.trim().parse()?;
+            }
+            if let Some(line_free) = line.strip_prefix("MemFree: ") {
+                mem.free = line_free.trim().parse()?;
+            }
+            if let Some(line_available) = line.strip_prefix("MemAvailable: ") {
+                mem.available = line_available.trim().parse()?;
+            }
+        }
+    }
+    Ok(mem)
 }
 
 pub async fn cpu_time() -> Result<f64> {

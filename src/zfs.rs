@@ -1,4 +1,4 @@
-use crate::heim::DiskUsage;
+use crate::sensors::DiskUsage;
 use color_eyre::Result;
 use std::process::Command;
 
