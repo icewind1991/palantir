@@ -38,102 +38,96 @@ pub struct DiskUsage {
     pub free: u64,
 }
 
-#[derive(Default)]
-pub struct Heim {}
+pub async fn temperatures() -> Result<HashMap<TemperatureLabel, f32>> {
+    // ugly workaround problems between async-fs and tokio
+    let results = tokio::task::spawn_blocking(|| {
+        futures_lite::future::block_on(
+            heim::sensors::temperatures().collect::<Vec<Result<TemperatureSensor, heim::Error>>>(),
+        )
+    })
+    .await
+    .wrap_err("Failed to resolve future")?
+    .into_iter()
+    .filter_map(|result| result.ok())
+    .filter_map(|sensor| match (sensor.unit(), sensor.label()) {
+        ("k10temp", Some("Tdie")) => Some((
+            TemperatureLabel::CPU,
+            sensor
+                .current()
+                .get::<thermodynamic_temperature::degree_celsius>(),
+        )),
+        _ => None,
+    });
+    Ok(results.collect())
+}
 
-impl Heim {
-    pub async fn temperatures(&self) -> Result<HashMap<TemperatureLabel, f32>> {
-        // ugly workaround problems between async-fs and tokio
-        let results = tokio::task::spawn_blocking(|| {
-            futures_lite::future::block_on(
-                heim::sensors::temperatures()
-                    .collect::<Vec<Result<TemperatureSensor, heim::Error>>>(),
+pub async fn memory() -> Result<Memory> {
+    let memory = heim::memory::memory().await?;
+    Ok(Memory {
+        total: memory.total().get::<information::byte>(),
+        free: memory.free().get::<information::byte>(),
+        available: memory.available().get::<information::byte>(),
+    })
+}
+
+pub async fn cpu_time() -> Result<f64> {
+    let time = time().await?;
+    Ok(time.user().get::<time::second>() + time.system().get::<time::second>())
+}
+
+pub async fn network_stats() -> Result<impl Stream<Item = IOStats>> {
+    let networks = heim::net::io_counters().await?;
+    Ok(networks
+        .filter_map(|network| future::ready(network.ok()))
+        .filter(|network| future::ready(network.interface().starts_with("enp")))
+        .map(|network| IOStats {
+            interface: network.interface().into(),
+            bytes_sent: network.bytes_sent().get::<information::byte>(),
+            bytes_received: network.bytes_recv().get::<information::byte>(),
+        }))
+}
+
+pub async fn hostname() -> Result<String> {
+    Ok(heim::host::platform().await?.hostname().to_string())
+}
+
+pub async fn disk_stats() -> Result<impl Stream<Item = IOStats>> {
+    static DISK_REGEX: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"^([sv]d[a-z]+|nvme\dn\d)$").unwrap());
+    let disks = heim::disk::io_counters().await?;
+    Ok(disks
+        .filter_map(|disk| future::ready(disk.ok()))
+        .filter_map(|disk| {
+            future::ready(
+                disk.device_name()
+                    .to_str()
+                    .map(str::to_string)
+                    .map(|name| (disk, name)),
             )
         })
-        .await
-        .wrap_err("Failed to resolve future")?
-        .into_iter()
-        .filter_map(|result| result.ok())
-        .filter_map(|sensor| match (sensor.unit(), sensor.label()) {
-            ("k10temp", Some("Tdie")) => Some((
-                TemperatureLabel::CPU,
-                sensor
-                    .current()
-                    .get::<thermodynamic_temperature::degree_celsius>(),
-            )),
-            _ => None,
-        });
-        Ok(results.collect())
-    }
+        .filter(|(_disk, name)| future::ready(DISK_REGEX.is_match(&name)))
+        .map(|(disk, name)| IOStats {
+            interface: name,
+            bytes_sent: disk.write_bytes().get::<information::byte>(),
+            bytes_received: disk.read_bytes().get::<information::byte>(),
+        }))
+}
 
-    pub async fn memory(&self) -> Result<Memory> {
-        let memory = heim::memory::memory().await?;
-        Ok(Memory {
-            total: memory.total().get::<information::byte>(),
-            free: memory.free().get::<information::byte>(),
-            available: memory.available().get::<information::byte>(),
+pub async fn disk_usage() -> Result<impl Stream<Item = DiskUsage>> {
+    Ok(heim::disk::partitions_physical()
+        .await?
+        .filter_map(|result| future::ready(result.ok()))
+        .filter(|partition: &Partition| {
+            future::ready(!partition.file_system().eq(&FileSystem::Zfs))
         })
-    }
-
-    pub async fn cpu_time(&self) -> Result<f64> {
-        let time = time().await?;
-        Ok(time.user().get::<time::second>() + time.system().get::<time::second>())
-    }
-
-    pub async fn network_stats(&self) -> Result<impl Stream<Item = IOStats>> {
-        let networks = heim::net::io_counters().await?;
-        Ok(networks
-            .filter_map(|network| future::ready(network.ok()))
-            .filter(|network| future::ready(network.interface().starts_with("enp")))
-            .map(|network| IOStats {
-                interface: network.interface().into(),
-                bytes_sent: network.bytes_sent().get::<information::byte>(),
-                bytes_received: network.bytes_recv().get::<information::byte>(),
-            }))
-    }
-
-    pub async fn hostname(&self) -> Result<String> {
-        Ok(heim::host::platform().await?.hostname().to_string())
-    }
-
-    pub async fn disk_stats(&self) -> Result<impl Stream<Item = IOStats>> {
-        static DISK_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"^([sv]d[a-z]+|nvme\dn\d)$").unwrap());
-        let disks = heim::disk::io_counters().await?;
-        Ok(disks
-            .filter_map(|disk| future::ready(disk.ok()))
-            .filter_map(|disk| {
-                future::ready(
-                    disk.device_name()
-                        .to_str()
-                        .map(str::to_string)
-                        .map(|name| (disk, name)),
-                )
-            })
-            .filter(|(_disk, name)| future::ready(DISK_REGEX.is_match(&name)))
-            .map(|(disk, name)| IOStats {
-                interface: name,
-                bytes_sent: disk.write_bytes().get::<information::byte>(),
-                bytes_received: disk.read_bytes().get::<information::byte>(),
-            }))
-    }
-
-    pub async fn disk_usage(&self) -> Result<impl Stream<Item = DiskUsage>> {
-        Ok(heim::disk::partitions_physical()
-            .await?
-            .filter_map(|result| future::ready(result.ok()))
-            .filter(|partition: &Partition| {
-                future::ready(!partition.file_system().eq(&FileSystem::Zfs))
-            })
-            .filter_map(|partition: Partition| async move {
-                let name = partition.mount_point().to_string_lossy().to_string();
-                partition.usage().await.ok().map(|usage| (name, usage))
-            })
-            .filter(|(mount_point, _usage)| future::ready(!mount_point.contains("/snap/")))
-            .map(|(mount_point, usage)| DiskUsage {
-                name: mount_point,
-                size: usage.total().get::<information::byte>(),
-                free: usage.free().get::<information::byte>(),
-            }))
-    }
+        .filter_map(|partition: Partition| async move {
+            let name = partition.mount_point().to_string_lossy().to_string();
+            partition.usage().await.ok().map(|usage| (name, usage))
+        })
+        .filter(|(mount_point, _usage)| future::ready(!mount_point.contains("/snap/")))
+        .map(|(mount_point, usage)| DiskUsage {
+            name: mount_point,
+            size: usage.total().get::<information::byte>(),
+            free: usage.free().get::<information::byte>(),
+        }))
 }
