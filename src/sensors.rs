@@ -1,9 +1,8 @@
 use color_eyre::{Report, Result};
 use futures_util::future;
 use futures_util::stream::{Stream, StreamExt};
-use heim::cpu::time;
 use heim::disk::{FileSystem, Partition};
-use heim::units::{information, time};
+use heim::units::information;
 use once_cell::sync::Lazy;
 use parse_display::Display;
 use regex::Regex;
@@ -110,9 +109,22 @@ pub fn memory() -> Result<Memory> {
     Ok(mem)
 }
 
-pub async fn cpu_time() -> Result<f64> {
-    let time = time().await?;
-    Ok(time.user().get::<time::second>() + time.system().get::<time::second>())
+pub fn cpu_time() -> Result<u64> {
+    let stat = BufReader::new(File::open("/proc/stat")?);
+    let line = stat
+        .lines()
+        .next()
+        .ok_or(Report::msg("Invalid /proc/stat"))??;
+    let mut parts = line.split_ascii_whitespace();
+    if let (_cpu, Some(user), _nice, Some(system)) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    {
+        let user: u64 = user.parse()?;
+        let system: u64 = system.parse()?;
+        Ok((user + system) * clock_ticks()?)
+    } else {
+        Err(Report::msg("Invalid /proc/stat"))
+    }
 }
 
 pub async fn network_stats() -> Result<impl Stream<Item = IOStats>> {
@@ -172,4 +184,14 @@ pub async fn disk_usage() -> Result<impl Stream<Item = DiskUsage>> {
             size: usage.total().get::<information::byte>(),
             free: usage.free().get::<information::byte>(),
         }))
+}
+
+fn clock_ticks() -> Result<u64> {
+    let result = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
+
+    if result > 0 {
+        Ok(result as u64)
+    } else {
+        Err(Report::msg("Failed to get clock ticks"))
+    }
 }

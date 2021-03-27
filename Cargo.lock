@@ -1059,6 +1059,7 @@ dependencies = [
  "heim",
  "hostname",
  "iai",
+ "libc",
  "once_cell",
  "parse-display",
  "regex",
