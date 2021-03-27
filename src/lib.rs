@@ -1,27 +1,17 @@
-pub(crate) mod heim;
-mod zfs;
+pub mod heim;
+pub mod zfs;
 
 use crate::heim::*;
 use crate::zfs::pools;
 use color_eyre::Result;
 use futures_util::stream::StreamExt;
 use futures_util::{pin_mut, try_join};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Write;
 
 pub async fn get_metrics() -> Result<String> {
-    let (hostname, pools, cpu, memory, network, temperatures, disks, disk_usage): (
-        String,
-        Vec<DiskUsage>,
-        f64,
-        Memory,
-        _,
-        HashMap<TemperatureLabel, f32>,
-        _,
-        _,
-    ) = try_join! {
+    let (hostname, cpu, memory, network, temperatures, disks, disk_usage) = try_join! {
         hostname(),
-        pools(),
         cpu_time(),
         memory(),
         network_stats(),
@@ -29,6 +19,7 @@ pub async fn get_metrics() -> Result<String> {
         disk_stats(),
         disk_usage(),
     }?;
+    let pools = pools();
     pin_mut!(network);
     pin_mut!(disks);
     pin_mut!(disk_usage);
