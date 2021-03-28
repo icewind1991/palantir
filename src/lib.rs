@@ -7,7 +7,7 @@ use crate::zfs::pools;
 use color_eyre::Result;
 use std::fmt::Write;
 
-pub async fn get_metrics() -> Result<String> {
+pub fn get_metrics() -> Result<String> {
     let disk_usage = disk_usage()?;
     let disks = disk_stats()?;
     let cpu = cpu_time()?;

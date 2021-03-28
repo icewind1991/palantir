@@ -2,11 +2,9 @@ use iai::black_box;
 use palantir::get_metrics;
 use palantir::sensors::{cpu_time, disk_stats, disk_usage, memory, network_stats, temperatures};
 use palantir::zfs::pools;
-use tokio::runtime::Runtime;
 
 fn iai_get_metrics() -> String {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async { black_box(get_metrics().await.unwrap()) })
+    black_box(get_metrics().unwrap())
 }
 
 fn iai_zfs_pool() {

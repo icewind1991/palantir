@@ -17,7 +17,6 @@ impl Reject for ReportRejection {}
 
 async fn serve_metrics() -> Result<String, Rejection> {
     get_metrics()
-        .await
         .map_err(ReportRejection::from)
         .map_err(warp::reject::custom)
 }
