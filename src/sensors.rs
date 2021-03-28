@@ -96,7 +96,7 @@ pub fn memory() -> Result<Memory> {
         if line.is_empty() {
             break;
         }
-        if let Some(line) = line.strip_suffix(" kB") {
+        if let Some(line) = line.strip_suffix(" kB\n") {
             if let Some(line_total) = line.strip_prefix("MemTotal: ") {
                 mem.total = line_total.trim().parse()?;
             }
