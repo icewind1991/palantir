@@ -123,7 +123,7 @@ pub fn cpu_time() -> Result<u64> {
     {
         let user: u64 = user.parse()?;
         let system: u64 = system.parse()?;
-        Ok((user + system) * clock_ticks()?)
+        Ok((user + system) / clock_ticks()?)
     } else {
         Err(Report::msg("Invalid /proc/stat"))
     }
