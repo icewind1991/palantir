@@ -41,7 +41,7 @@ impl Iterator for OutputParser {
         let line = match str[self.pos..].find('\n') {
             Some(next_pos) => {
                 let old_pos = self.pos;
-                self.pos += next_pos;
+                self.pos += next_pos + 1;
                 Some(&str[old_pos..self.pos])
             }
             None if self.pos < str.len() => {
