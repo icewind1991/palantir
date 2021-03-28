@@ -21,3 +21,6 @@ iai = "0.1"
 [[bench]]
 name = "iai"
 harness = false
+
+[profile.release]
+lto = true
