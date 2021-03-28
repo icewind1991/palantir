@@ -51,7 +51,6 @@ pub fn get_metrics() -> Result<String> {
         .ok();
     }
     for network in networks {
-        let network: IoStats = network;
         if network.bytes_received > 0 || network.bytes_sent > 0 {
             writeln!(
                 &mut result,
@@ -68,7 +67,6 @@ pub fn get_metrics() -> Result<String> {
         }
     }
     for disk in disks {
-        let disk: IoStats = disk;
         if disk.bytes_received > 0 && disk.bytes_sent > 0 {
             writeln!(
                 &mut result,
@@ -86,7 +84,6 @@ pub fn get_metrics() -> Result<String> {
     }
 
     for disk in disk_usage {
-        let disk: DiskUsage = disk;
         if disk.size > 0 {
             writeln!(
                 &mut result,
