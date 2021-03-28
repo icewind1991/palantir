@@ -1,18 +1,25 @@
 use color_eyre::{Report, Result};
 use once_cell::sync::Lazy;
-use parse_display::Display;
 use regex::Regex;
-use std::collections::HashMap;
+use std::array::IntoIter;
 use std::ffi::{CStr, CString};
-use std::fs::{read, read_dir, read_to_string, DirEntry, File};
+use std::fs::{read, read_dir, read_to_string, File};
 use std::io::{BufRead, BufReader};
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Display)]
-#[display(style = "lowercase")]
-pub enum TemperatureLabel {
-    Cpu,
+#[derive(Debug, Clone, Default)]
+pub struct Temperatures {
+    cpu: f32,
+}
+
+impl IntoIterator for Temperatures {
+    type Item = (&'static str, f32);
+    type IntoIter = IntoIter<Self::Item, 1>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter::new([("cpu", self.cpu)])
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -36,50 +43,47 @@ pub struct DiskUsage {
     pub free: u64,
 }
 
-pub fn temperatures() -> Result<HashMap<TemperatureLabel, f32>> {
-    Ok(read_dir("/sys/class/hwmon")?
-        .filter_map(Result::ok)
-        .filter_map(|dir: DirEntry| {
-            let name = read(dir.path().join("name")).ok()?;
-            match name.as_slice() {
-                b"k10temp\n" => Some((name, dir)),
-                _ => None,
+pub fn temperatures() -> Result<Temperatures> {
+    let mut temps = Temperatures::default();
+
+    const DESIRED_HW_MON: &[&[u8]] = &[b"k10temp\n"];
+    const DESIRED_SENSORS: &[&[u8]] = &[b"Tdie\n"];
+
+    for hwmon in read_dir("/sys/class/hwmon")? {
+        let hwmon = hwmon?;
+        let hwmon_name = read(hwmon.path().join("name"))?;
+        if !DESIRED_HW_MON.contains(&hwmon_name.as_slice()) {
+            continue;
+        }
+        for file in read_dir(hwmon.path())? {
+            let file = file?;
+            let path = file.path();
+            let file_name = file.file_name();
+            let bytes = file_name.as_bytes();
+            let label = if bytes.starts_with(b"temp") && bytes.ends_with(b"_label") {
+                read(&path)?
+            } else {
+                continue;
+            };
+            if !DESIRED_SENSORS.contains(&label.as_slice()) {
+                continue;
             }
-        })
-        .flat_map(|(name, dir)| {
-            read_dir(dir.path())
-                .into_iter()
-                .flatten()
-                .filter_map(Result::ok)
-                .filter_map(move |item: DirEntry| {
-                    let file_name = item.file_name();
-                    let bytes = file_name.as_bytes();
-                    if bytes.starts_with(b"temp") && bytes.ends_with(b"_label") {
-                        let label = read(item.path()).ok()?;
-                        Some((name.clone(), label, item))
-                    } else {
-                        None
-                    }
-                })
-        })
-        .filter_map(
-            |(name, label, item)| match (name.as_slice(), label.as_slice()) {
-                (b"k10temp\n", b"Tdie\n") => Some((TemperatureLabel::Cpu, item)),
-                _ => None,
-            },
-        )
-        .filter_map(|(label, item)| {
-            let path = item.path().into_os_string();
-            Some((label, path.into_string().ok()?))
-        })
-        .filter_map(|(label, mut path)| {
+            let mut path = path
+                .into_os_string()
+                .into_string()
+                .map_err(|_| Report::msg("Invalid hwmon path"))?;
             path.truncate(path.len() - "label".len());
             path.push_str("input");
-            let value = read_to_string(path).ok()?;
-            let parsed: u32 = value.trim().parse().ok()?;
-            Some((label, parsed as f32 / 1000.0))
-        })
-        .collect())
+            let value = read_to_string(path)?;
+            let parsed: u32 = value.trim().parse()?;
+            match (hwmon_name.as_slice(), label.as_slice()) {
+                (b"k10temp\n", b"Tdie\n") => temps.cpu = parsed as f32 / 100.0,
+                _ => {}
+            }
+        }
+    }
+
+    Ok(temps)
 }
 
 pub fn memory() -> Result<Memory> {
@@ -173,7 +177,7 @@ pub fn hostname() -> Result<String> {
 
 pub fn disk_stats() -> Result<impl Iterator<Item = IoStats>> {
     static DISK_REGEX: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r" ([sv]d[a-z]+|nvme\dn\d) ").unwrap());
+        Lazy::new(|| Regex::new(r" ([sv]d[a-z]+|nvme[0-9]n[0-9]) ").unwrap());
 
     let stat = BufReader::new(File::open("/proc/diskstats")?);
     Ok(stat
