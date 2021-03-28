@@ -1,9 +1,12 @@
+use ahash::{AHasher, RandomState};
 use color_eyre::{Report, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::array::IntoIter;
+use std::collections::HashSet;
 use std::ffi::{CStr, CString};
 use std::fs::{read, read_dir, read_to_string, File};
+use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader};
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
@@ -98,13 +101,13 @@ pub fn memory() -> Result<Memory> {
         }
         if let Some(line) = line.strip_suffix(" kB\n") {
             if let Some(line_total) = line.strip_prefix("MemTotal: ") {
-                mem.total = line_total.trim().parse()?;
+                mem.total = line_total.trim().parse::<u64>()? * 1000;
             }
             if let Some(line_free) = line.strip_prefix("MemFree: ") {
-                mem.free = line_free.trim().parse()?;
+                mem.free = line_free.trim().parse::<u64>()? * 1000;
             }
             if let Some(line_available) = line.strip_prefix("MemAvailable: ") {
-                mem.available = line_available.trim().parse()?;
+                mem.available = line_available.trim().parse::<u64>()? * 1000;
             }
         }
     }
@@ -204,12 +207,19 @@ pub fn disk_stats() -> Result<impl Iterator<Item = IoStats>> {
 
 pub fn disk_usage() -> Result<impl Iterator<Item = DiskUsage>> {
     let stat = BufReader::new(File::open("/proc/mounts")?);
+    let mut found_disks = HashSet::with_capacity_and_hasher(8, RandomState::new());
     Ok(stat
         .lines()
         .filter_map(Result::ok)
         .filter(|line| line.starts_with('/'))
-        .filter_map(|line: String| {
-            let mount_point = line.split_ascii_whitespace().nth(1)?;
+        .filter(|line| !line.contains("/dev/loop"))
+        .filter_map(move |line: String| {
+            let mut parts = line.split_ascii_whitespace();
+            let disk = parts.next()?;
+            if !found_disks.insert(hash_str(disk)) {
+                return None;
+            }
+            let mount_point = parts.next()?;
             let mount_point = CString::new(mount_point).ok()?;
             let stat = statvfs(&mount_point).ok()?;
             Some(DiskUsage {
@@ -250,4 +260,10 @@ fn cpu_count() -> Result<u64> {
     } else {
         Ok(result as u64)
     }
+}
+
+fn hash_str(s: &str) -> u64 {
+    let mut hasher = AHasher::default();
+    s.hash(&mut hasher);
+    hasher.finish()
 }
