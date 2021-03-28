@@ -17,7 +17,7 @@ pub fn get_metrics() -> Result<String> {
     let pools = pools();
     let networks = network_stats()?;
     let mut result = String::with_capacity(256);
-    writeln!(&mut result, "cpu_time{{host=\"{}\"}} {:.1}", hostname, cpu).ok();
+    writeln!(&mut result, "cpu_time{{host=\"{}\"}} {:.3}", hostname, cpu).ok();
     writeln!(
         &mut result,
         "memory_total{{host=\"{}\"}} {}",

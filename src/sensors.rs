@@ -111,7 +111,7 @@ pub fn memory() -> Result<Memory> {
     Ok(mem)
 }
 
-pub fn cpu_time() -> Result<u64> {
+pub fn cpu_time() -> Result<f32> {
     let stat = BufReader::new(File::open("/proc/stat")?);
     let line = stat
         .lines()
@@ -121,9 +121,9 @@ pub fn cpu_time() -> Result<u64> {
     if let (_cpu, Some(user), _nice, Some(system)) =
         (parts.next(), parts.next(), parts.next(), parts.next())
     {
-        let user: u64 = user.parse()?;
-        let system: u64 = system.parse()?;
-        Ok((user + system) / clock_ticks()?)
+        let user: f32 = user.parse()?;
+        let system: f32 = system.parse()?;
+        Ok((user + system) / (clock_ticks()? as f32) / (cpu_count()? as f32))
     } else {
         Err(Report::msg("Invalid /proc/stat"))
     }
@@ -239,5 +239,15 @@ fn statvfs(path: &CStr) -> Result<libc::statvfs> {
         Ok(vfs)
     } else {
         Err(Report::msg("Failed to stat vfs"))
+    }
+}
+
+fn cpu_count() -> Result<u64> {
+    let result = unsafe { libc::sysconf(libc::_SC_NPROCESSORS_ONLN) };
+
+    if result < 0 {
+        Err(Report::msg("Failed to get cpu count"))
+    } else {
+        Ok(result as u64)
     }
 }
