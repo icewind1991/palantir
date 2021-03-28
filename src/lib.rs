@@ -5,7 +5,6 @@ use crate::sensors::temperatures;
 use crate::sensors::*;
 use crate::zfs::pools;
 use color_eyre::Result;
-use std::collections::HashSet;
 use std::fmt::Write;
 
 pub async fn get_metrics() -> Result<String> {
@@ -52,7 +51,7 @@ pub async fn get_metrics() -> Result<String> {
         .ok();
     }
     for network in networks {
-        let network: IOStats = network;
+        let network: IoStats = network;
         if network.bytes_received > 0 || network.bytes_sent > 0 {
             writeln!(
                 &mut result,
@@ -69,7 +68,7 @@ pub async fn get_metrics() -> Result<String> {
         }
     }
     for disk in disks {
-        let disk: IOStats = disk;
+        let disk: IoStats = disk;
         if disk.bytes_received > 0 && disk.bytes_sent > 0 {
             writeln!(
                 &mut result,
@@ -86,24 +85,21 @@ pub async fn get_metrics() -> Result<String> {
         }
     }
 
-    let mut found_sizes = HashSet::new();
     for disk in disk_usage {
         let disk: DiskUsage = disk;
         if disk.size > 0 {
-            if found_sizes.insert((disk.size, disk.free)) {
-                writeln!(
-                    &mut result,
-                    "disk_size{{host=\"{}\", disk=\"{}\"}} {}",
-                    hostname, disk.name, disk.size
-                )
-                .ok();
-                writeln!(
-                    &mut result,
-                    "disk_free{{host=\"{}\", disk=\"{}\"}} {}",
-                    hostname, disk.name, disk.free
-                )
-                .ok();
-            }
+            writeln!(
+                &mut result,
+                "disk_size{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, disk.name, disk.size
+            )
+            .ok();
+            writeln!(
+                &mut result,
+                "disk_free{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, disk.name, disk.free
+            )
+            .ok();
         }
     }
     for (label, temp) in temperatures {

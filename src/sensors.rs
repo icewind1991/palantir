@@ -12,7 +12,7 @@ use std::os::unix::ffi::OsStrExt;
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Display)]
 #[display(style = "lowercase")]
 pub enum TemperatureLabel {
-    CPU,
+    Cpu,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -23,7 +23,7 @@ pub struct Memory {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct IOStats {
+pub struct IoStats {
     pub interface: String,
     pub bytes_sent: u64,
     pub bytes_received: u64,
@@ -49,7 +49,7 @@ pub fn temperatures() -> Result<HashMap<TemperatureLabel, f32>> {
         .flat_map(|(name, dir)| {
             read_dir(dir.path())
                 .into_iter()
-                .flat_map(|dir| dir)
+                .flatten()
                 .filter_map(Result::ok)
                 .filter_map(move |item: DirEntry| {
                     let file_name = item.file_name();
@@ -64,7 +64,7 @@ pub fn temperatures() -> Result<HashMap<TemperatureLabel, f32>> {
         })
         .filter_map(
             |(name, label, item)| match (name.as_slice(), label.as_slice()) {
-                (b"k10temp\n", b"Tdie\n") => Some((TemperatureLabel::CPU, item)),
+                (b"k10temp\n", b"Tdie\n") => Some((TemperatureLabel::Cpu, item)),
                 _ => None,
             },
         )
@@ -112,7 +112,7 @@ pub fn cpu_time() -> Result<u64> {
     let line = stat
         .lines()
         .next()
-        .ok_or(Report::msg("Invalid /proc/stat"))??;
+        .ok_or_else(|| Report::msg("Invalid /proc/stat"))??;
     let mut parts = line.split_ascii_whitespace();
     if let (_cpu, Some(user), _nice, Some(system)) =
         (parts.next(), parts.next(), parts.next(), parts.next())
@@ -125,7 +125,7 @@ pub fn cpu_time() -> Result<u64> {
     }
 }
 
-pub fn network_stats() -> Result<impl Iterator<Item = IOStats>> {
+pub fn network_stats() -> Result<impl Iterator<Item = IoStats>> {
     let stat = BufReader::new(File::open("/proc/net/dev")?);
     Ok(stat
         .lines()
@@ -154,7 +154,7 @@ pub fn network_stats() -> Result<impl Iterator<Item = IOStats>> {
                 parts.next(),
                 parts.next(),
             ) {
-                Some(IOStats {
+                Some(IoStats {
                     interface: interface.trim_end_matches(':').into(),
                     bytes_sent: bytes_sent.parse().ok()?,
                     bytes_received: bytes_received.parse().ok()?,
@@ -171,7 +171,7 @@ pub fn hostname() -> Result<String> {
         .map_err(|_| Report::msg("non utf8 hostname"))
 }
 
-pub fn disk_stats() -> Result<impl Iterator<Item = IOStats>> {
+pub fn disk_stats() -> Result<impl Iterator<Item = IoStats>> {
     static DISK_REGEX: Lazy<Regex> =
         Lazy::new(|| Regex::new(r" ([sv]d[a-z]+|nvme\dn\d) ").unwrap());
 
@@ -190,7 +190,7 @@ pub fn disk_stats() -> Result<impl Iterator<Item = IOStats>> {
             let _write_count = parts.next();
             let _write_merged_count = parts.next();
             let write_bytes = parts.next()?.parse().ok()?;
-            Some(IOStats {
+            Some(IoStats {
                 interface: name,
                 bytes_sent: write_bytes,
                 bytes_received: read_bytes,
