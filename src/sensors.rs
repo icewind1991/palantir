@@ -173,25 +173,30 @@ pub fn hostname() -> Result<String> {
         .map_err(|_| Report::msg("non utf8 hostname"))
 }
 
-pub async fn disk_stats() -> Result<impl Stream<Item = IOStats>> {
+pub fn disk_stats() -> Result<impl Iterator<Item = IOStats>> {
     static DISK_REGEX: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"^([sv]d[a-z]+|nvme\dn\d)$").unwrap());
-    let disks = heim::disk::io_counters().await?;
-    Ok(disks
-        .filter_map(|disk| future::ready(disk.ok()))
-        .filter_map(|disk| {
-            future::ready(
-                disk.device_name()
-                    .to_str()
-                    .map(str::to_string)
-                    .map(|name| (disk, name)),
-            )
-        })
-        .filter(|(_disk, name)| future::ready(DISK_REGEX.is_match(&name)))
-        .map(|(disk, name)| IOStats {
-            interface: name,
-            bytes_sent: disk.write_bytes().get::<information::byte>(),
-            bytes_received: disk.read_bytes().get::<information::byte>(),
+        Lazy::new(|| Regex::new(r" ([sv]d[a-z]+|nvme\dn\d) ").unwrap());
+
+    let stat = BufReader::new(File::open("/proc/diskstats")?);
+    Ok(stat
+        .lines()
+        .filter_map(Result::ok)
+        .filter(|line| DISK_REGEX.is_match(line))
+        .filter_map(|line: String| {
+            let mut parts = line.split_whitespace().skip(2);
+            let name: String = parts.next()?.into();
+            let _read_count = parts.next();
+            let _read_merged_count = parts.next();
+            let read_bytes = parts.next()?.parse().ok()?;
+            let mut parts = parts.skip(1);
+            let _write_count = parts.next();
+            let _write_merged_count = parts.next();
+            let write_bytes = parts.next()?.parse().ok()?;
+            Some(IOStats {
+                interface: name,
+                bytes_sent: write_bytes,
+                bytes_received: read_bytes,
+            })
         }))
 }
 

@@ -5,24 +5,20 @@ use crate::sensors::temperatures;
 use crate::sensors::*;
 use crate::zfs::pools;
 use color_eyre::Result;
+use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
-use futures_util::{pin_mut, try_join};
 use std::collections::HashSet;
 use std::fmt::Write;
 
 pub async fn get_metrics() -> Result<String> {
-    let (disks, disk_usage) = try_join! {
-        disk_stats(),
-        disk_usage(),
-    }?;
+    let disk_usage = disk_usage().await?;
+    let disks = disk_stats()?;
     let cpu = cpu_time()?;
     let hostname = hostname()?;
     let memory = memory()?;
     let temperatures = temperatures()?;
     let pools = pools();
-    let network = network_stats()?;
-    pin_mut!(network);
-    pin_mut!(disks);
+    let networks = network_stats()?;
     pin_mut!(disk_usage);
     let mut result = String::with_capacity(256);
     writeln!(&mut result, "cpu_time{{host=\"{}\"}} {:.1}", hostname, cpu).ok();
@@ -58,7 +54,7 @@ pub async fn get_metrics() -> Result<String> {
         )
         .ok();
     }
-    while let Some(network) = network.next() {
+    for network in networks {
         let network: IOStats = network;
         if network.bytes_received > 0 || network.bytes_sent > 0 {
             writeln!(
@@ -75,7 +71,7 @@ pub async fn get_metrics() -> Result<String> {
             .ok();
         }
     }
-    while let Some(disk) = disks.next().await {
+    for disk in disks {
         let disk: IOStats = disk;
         if disk.bytes_received > 0 && disk.bytes_sent > 0 {
             writeln!(
