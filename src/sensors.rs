@@ -127,15 +127,43 @@ pub fn cpu_time() -> Result<u64> {
     }
 }
 
-pub async fn network_stats() -> Result<impl Stream<Item = IOStats>> {
-    let networks = heim::net::io_counters().await?;
-    Ok(networks
-        .filter_map(|network| future::ready(network.ok()))
-        .filter(|network| future::ready(network.interface().starts_with("enp")))
-        .map(|network| IOStats {
-            interface: network.interface().into(),
-            bytes_sent: network.bytes_sent().get::<information::byte>(),
-            bytes_received: network.bytes_recv().get::<information::byte>(),
+pub fn network_stats() -> Result<impl Iterator<Item = IOStats>> {
+    let stat = BufReader::new(File::open("/proc/net/dev")?);
+    Ok(stat
+        .lines()
+        .filter_map(Result::ok)
+        .filter(|line: &String| line.starts_with("enp"))
+        .filter_map(|line: String| {
+            let mut parts = line.split_ascii_whitespace();
+            if let (
+                Some(interface),
+                Some(bytes_received),
+                _err,
+                _drop,
+                _fifo,
+                _frame,
+                _compressed,
+                _multicast,
+                Some(bytes_sent),
+            ) = (
+                parts.next(),
+                parts.next(),
+                parts.next(),
+                parts.next(),
+                parts.next(),
+                parts.next(),
+                parts.next(),
+                parts.next(),
+                parts.next(),
+            ) {
+                Some(IOStats {
+                    interface: interface.trim_end_matches(':').into(),
+                    bytes_sent: bytes_sent.parse().ok()?,
+                    bytes_received: bytes_received.parse().ok()?,
+                })
+            } else {
+                None
+            }
         }))
 }
 

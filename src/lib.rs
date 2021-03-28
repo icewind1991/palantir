@@ -11,8 +11,7 @@ use std::collections::HashSet;
 use std::fmt::Write;
 
 pub async fn get_metrics() -> Result<String> {
-    let (network, disks, disk_usage) = try_join! {
-        network_stats(),
+    let (disks, disk_usage) = try_join! {
         disk_stats(),
         disk_usage(),
     }?;
@@ -21,6 +20,7 @@ pub async fn get_metrics() -> Result<String> {
     let memory = memory()?;
     let temperatures = temperatures()?;
     let pools = pools();
+    let network = network_stats()?;
     pin_mut!(network);
     pin_mut!(disks);
     pin_mut!(disk_usage);
@@ -58,7 +58,7 @@ pub async fn get_metrics() -> Result<String> {
         )
         .ok();
     }
-    while let Some(network) = network.next().await {
+    while let Some(network) = network.next() {
         let network: IOStats = network;
         if network.bytes_received > 0 || network.bytes_sent > 0 {
             writeln!(
