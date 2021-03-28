@@ -1,14 +1,12 @@
 use color_eyre::{Report, Result};
-use futures_util::future;
-use futures_util::stream::{Stream, StreamExt};
-use heim::disk::{FileSystem, Partition};
-use heim::units::information;
 use once_cell::sync::Lazy;
 use parse_display::Display;
 use regex::Regex;
 use std::collections::HashMap;
+use std::ffi::{CStr, CString};
 use std::fs::{read, read_dir, read_to_string, DirEntry, File};
 use std::io::{BufRead, BufReader};
+use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Display)]
@@ -200,22 +198,21 @@ pub fn disk_stats() -> Result<impl Iterator<Item = IOStats>> {
         }))
 }
 
-pub async fn disk_usage() -> Result<impl Stream<Item = DiskUsage>> {
-    Ok(heim::disk::partitions_physical()
-        .await?
-        .filter_map(|result| future::ready(result.ok()))
-        .filter(|partition: &Partition| {
-            future::ready(!partition.file_system().eq(&FileSystem::Zfs))
-        })
-        .filter_map(|partition: Partition| async move {
-            let name = partition.mount_point().to_string_lossy().to_string();
-            partition.usage().await.ok().map(|usage| (name, usage))
-        })
-        .filter(|(mount_point, _usage)| future::ready(!mount_point.contains("/snap/")))
-        .map(|(mount_point, usage)| DiskUsage {
-            name: mount_point,
-            size: usage.total().get::<information::byte>(),
-            free: usage.free().get::<information::byte>(),
+pub fn disk_usage() -> Result<impl Iterator<Item = DiskUsage>> {
+    let stat = BufReader::new(File::open("/proc/mounts")?);
+    Ok(stat
+        .lines()
+        .filter_map(Result::ok)
+        .filter(|line| line.starts_with('/'))
+        .filter_map(|line: String| {
+            let mount_point = line.split_ascii_whitespace().nth(1)?;
+            let mount_point = CString::new(mount_point).ok()?;
+            let stat = statvfs(&mount_point).ok()?;
+            Some(DiskUsage {
+                name: mount_point.into_string().unwrap(),
+                size: stat.f_blocks * stat.f_frsize,
+                free: stat.f_bavail * stat.f_frsize,
+            })
         }))
 }
 
@@ -226,5 +223,17 @@ fn clock_ticks() -> Result<u64> {
         Ok(result as u64)
     } else {
         Err(Report::msg("Failed to get clock ticks"))
+    }
+}
+
+fn statvfs(path: &CStr) -> Result<libc::statvfs> {
+    let mut vfs = MaybeUninit::<libc::statvfs>::uninit();
+    let result = unsafe { libc::statvfs(path.as_ptr(), vfs.as_mut_ptr()) };
+
+    if result == 0 {
+        let vfs = unsafe { vfs.assume_init() };
+        Ok(vfs)
+    } else {
+        Err(Report::msg("Failed to stat vfs"))
     }
 }

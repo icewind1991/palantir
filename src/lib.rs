@@ -5,13 +5,11 @@ use crate::sensors::temperatures;
 use crate::sensors::*;
 use crate::zfs::pools;
 use color_eyre::Result;
-use futures_util::pin_mut;
-use futures_util::stream::StreamExt;
 use std::collections::HashSet;
 use std::fmt::Write;
 
 pub async fn get_metrics() -> Result<String> {
-    let disk_usage = disk_usage().await?;
+    let disk_usage = disk_usage()?;
     let disks = disk_stats()?;
     let cpu = cpu_time()?;
     let hostname = hostname()?;
@@ -19,7 +17,6 @@ pub async fn get_metrics() -> Result<String> {
     let temperatures = temperatures()?;
     let pools = pools();
     let networks = network_stats()?;
-    pin_mut!(disk_usage);
     let mut result = String::with_capacity(256);
     writeln!(&mut result, "cpu_time{{host=\"{}\"}} {:.1}", hostname, cpu).ok();
     writeln!(
@@ -90,7 +87,7 @@ pub async fn get_metrics() -> Result<String> {
     }
 
     let mut found_sizes = HashSet::new();
-    while let Some(disk) = disk_usage.next().await {
+    for disk in disk_usage {
         let disk: DiskUsage = disk;
         if disk.size > 0 {
             if found_sizes.insert((disk.size, disk.free)) {
