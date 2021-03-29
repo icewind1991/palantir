@@ -137,12 +137,16 @@ pub fn network_stats() -> Result<impl Iterator<Item = IoStats>> {
     Ok(stat
         .lines()
         .filter_map(Result::ok)
-        .filter(|line: &String| line.starts_with("enp"))
+        .filter(|line: &String| {
+            let trimmed = line.trim_start();
+            trimmed.starts_with("en") || trimmed.starts_with("eth")
+        })
         .filter_map(|line: String| {
-            let mut parts = line.split_ascii_whitespace();
+            let mut parts = line.trim_start().split_ascii_whitespace();
             if let (
                 Some(interface),
                 Some(bytes_received),
+                _packets,
                 _err,
                 _drop,
                 _fifo,
@@ -151,6 +155,7 @@ pub fn network_stats() -> Result<impl Iterator<Item = IoStats>> {
                 _multicast,
                 Some(bytes_sent),
             ) = (
+                parts.next(),
                 parts.next(),
                 parts.next(),
                 parts.next(),
