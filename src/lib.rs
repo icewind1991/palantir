@@ -1,3 +1,4 @@
+pub mod docker;
 pub mod sensors;
 pub mod zfs;
 
