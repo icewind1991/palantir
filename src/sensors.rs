@@ -246,7 +246,7 @@ pub fn disk_usage() -> Result<impl Iterator<Item = DiskUsage>> {
         }))
 }
 
-fn clock_ticks() -> Result<u64> {
+pub fn clock_ticks() -> Result<u64> {
     let result = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
 
     if result > 0 {

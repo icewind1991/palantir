@@ -76,8 +76,6 @@ dependencies = [
 [[package]]
 name = "bollard"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "699194c00f3a2effd3358d47f880646818e3d483190b17ebcdf598c654fb77e9"
 dependencies = [
  "base64",
  "bollard-stubs",
