@@ -49,8 +49,11 @@ pub struct DiskUsage {
 pub fn temperatures() -> Result<Temperatures> {
     let mut temps = Temperatures::default();
 
-    const DESIRED_HW_MON: &[&[u8]] = &[b"k10temp\n"];
+    const DESIRED_HW_MON: &[&[u8]] = &[b"k10temp\n", b"coretemp\n"];
     const DESIRED_SENSORS: &[&[u8]] = &[b"Tdie\n"];
+
+    let mut cores_found = 0.0;
+    let mut core_total = 0.0;
 
     for hwmon in read_dir("/sys/class/hwmon")? {
         let hwmon = hwmon?;
@@ -68,7 +71,7 @@ pub fn temperatures() -> Result<Temperatures> {
             } else {
                 continue;
             };
-            if !DESIRED_SENSORS.contains(&label.as_slice()) {
+            if !DESIRED_SENSORS.contains(&label.as_slice()) && !label.starts_with(b"Core") {
                 continue;
             }
             let mut path = path
@@ -80,10 +83,18 @@ pub fn temperatures() -> Result<Temperatures> {
             let value = read_to_string(path)?;
             let parsed: u32 = value.trim().parse()?;
             match (hwmon_name.as_slice(), label.as_slice()) {
-                (b"k10temp\n", b"Tdie\n") => temps.cpu = parsed as f32 / 100.0,
+                (b"k10temp\n", b"Tdie\n") => temps.cpu = parsed as f32 / 1000.0,
+                (b"coretemp\n", core) if core.starts_with(b"Core") => {
+                    cores_found += 1.0;
+                    core_total += parsed as f32 / 1000.0
+                }
                 _ => {}
             }
         }
+    }
+
+    if temps.cpu == 0.0 && core_total > 0.0 {
+        temps.cpu = core_total / cores_found
     }
 
     Ok(temps)
