@@ -1,4 +1,5 @@
 use bollard::container::{Stats, StatsOptions};
+use bollard::models::ContainerSummaryInner;
 use bollard::Docker;
 use color_eyre::Result;
 use futures_util::future::ready;
@@ -8,36 +9,36 @@ use std::fmt::Write;
 #[derive(Debug)]
 pub struct Container {
     name: String,
+    image: String,
     memory: u64,
     cpu_time: f64,
-}
-
-impl From<Stats> for Container {
-    fn from(stats: Stats) -> Self {
-        Container {
-            name: stats.name,
-            memory: stats.memory_stats.usage.unwrap_or_default(),
-            cpu_time: stats.cpu_stats.cpu_usage.total_usage as f64
-                / 1_000_000_000.0
-                / stats.cpu_stats.online_cpus.unwrap_or(1) as f64,
-        }
-    }
 }
 
 impl Container {
     pub fn write<W: Write>(&self, mut w: W, hostname: &str) {
         writeln!(
             &mut w,
-            "container_memory{{host=\"{}\", container=\"{}\"}} {}",
-            hostname, self.name, self.memory
+            "container_memory{{host=\"{}\", container=\"{}\", image=\"{}\"}} {}",
+            hostname, self.name, self.image, self.memory
         )
         .ok();
         writeln!(
             &mut w,
-            "container_cpu_time{{host=\"{}\", container=\"{}\"}} {:.3}",
-            hostname, self.name, self.cpu_time
+            "container_cpu_time{{host=\"{}\", container=\"{}\", image=\"{}\"}} {:.3}",
+            hostname, self.name, self.image, self.cpu_time
         )
         .ok();
+    }
+
+    fn from(stats: Stats, container: ContainerSummaryInner) -> Self {
+        Container {
+            name: stats.name,
+            image: container.image.unwrap_or_default(),
+            memory: stats.memory_stats.usage.unwrap_or_default(),
+            cpu_time: stats.cpu_stats.cpu_usage.total_usage as f64
+                / 1_000_000_000.0
+                / stats.cpu_stats.online_cpus.unwrap_or(1) as f64,
+        }
     }
 }
 
@@ -59,10 +60,10 @@ pub async fn stat(docker: Docker) -> Result<impl Stream<Item = Container>> {
         .map(move |container| {
             let docker = docker.clone();
             async move {
-                let id = container.id.unwrap();
+                let id = container.id.as_ref().unwrap();
                 let stats: Stats = docker
                     .stats(
-                        &id,
+                        id,
                         Some(StatsOptions {
                             stream: false,
                             one_shot: true,
@@ -71,7 +72,7 @@ pub async fn stat(docker: Docker) -> Result<impl Stream<Item = Container>> {
                     .next()
                     .await?
                     .ok()?;
-                Some(stats.into())
+                Some(Container::from(stats, container))
             }
         })
         .collect::<FuturesUnordered<_>>()
