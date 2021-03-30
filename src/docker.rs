@@ -4,6 +4,7 @@ use bollard::Docker;
 use color_eyre::Result;
 use futures_util::future::ready;
 use futures_util::stream::{FuturesUnordered, Stream, StreamExt};
+use std::collections::HashMap;
 use std::fmt::Write;
 
 #[derive(Debug)]
@@ -12,6 +13,8 @@ pub struct Container {
     image: String,
     memory: u64,
     cpu_time: f64,
+    network_sent: u64,
+    network_received: u64,
 }
 
 impl Container {
@@ -28,6 +31,18 @@ impl Container {
             hostname, self.name, self.image, self.cpu_time
         )
         .ok();
+        writeln!(
+            &mut w,
+            "container_net_sent{{host=\"{}\", container=\"{}\", image=\"{}\"}} {:.3}",
+            hostname, self.name, self.image, self.network_sent
+        )
+        .ok();
+        writeln!(
+            &mut w,
+            "container_net_received{{host=\"{}\", container=\"{}\", image=\"{}\"}} {:.3}",
+            hostname, self.name, self.image, self.network_received
+        )
+        .ok();
     }
 
     fn from(stats: Stats, container: ContainerSummaryInner) -> Self {
@@ -38,6 +53,20 @@ impl Container {
             cpu_time: stats.cpu_stats.cpu_usage.total_usage as f64
                 / 1_000_000_000.0
                 / stats.cpu_stats.online_cpus.unwrap_or(1) as f64,
+            network_sent: stats
+                .networks
+                .as_ref()
+                .into_iter()
+                .flat_map(HashMap::values)
+                .map(|stats| stats.tx_bytes)
+                .sum(),
+            network_received: stats
+                .networks
+                .as_ref()
+                .into_iter()
+                .flat_map(HashMap::values)
+                .map(|stats| stats.rx_bytes)
+                .sum(),
         }
     }
 }
