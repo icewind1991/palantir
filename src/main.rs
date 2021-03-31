@@ -4,6 +4,7 @@ use futures_util::pin_mut;
 use futures_util::StreamExt;
 use palantir::docker::{get_docker, stat, Container};
 use palantir::get_metrics;
+use palantir::power::power_usage;
 use warp::reject::Reject;
 use warp::{Filter, Rejection};
 
@@ -21,14 +22,17 @@ impl Reject for ReportRejection {}
 
 async fn serve_inner(docker: Option<Docker>) -> Result<String> {
     let mut metrics = get_metrics()?;
+    let hostname = palantir::sensors::hostname()?;
     if let Some(docker) = docker {
-        let hostname = palantir::sensors::hostname()?;
         let containers = stat(docker).await?;
         pin_mut!(containers);
         while let Some(container) = containers.next().await {
             let container: Container = container;
             container.write(&mut metrics, &hostname);
         }
+    }
+    if let Some(power) = power_usage()? {
+        power.write(&mut metrics, &hostname);
     }
     Ok(metrics)
 }
