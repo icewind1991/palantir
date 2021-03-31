@@ -208,15 +208,15 @@ pub fn disk_stats() -> Result<impl Iterator<Item = IoStats>> {
             let name: String = parts.next()?.into();
             let _read_count = parts.next();
             let _read_merged_count = parts.next();
-            let read_bytes = parts.next()?.parse().ok()?;
+            let read_sectors = parts.next()?.parse::<u64>().ok()?;
             let mut parts = parts.skip(1);
             let _write_count = parts.next();
             let _write_merged_count = parts.next();
-            let write_bytes = parts.next()?.parse().ok()?;
+            let write_sectors = parts.next()?.parse::<u64>().ok()?;
             Some(IoStats {
                 interface: name,
-                bytes_sent: write_bytes,
-                bytes_received: read_bytes,
+                bytes_sent: write_sectors * 512,
+                bytes_received: read_sectors * 512,
             })
         }))
 }
