@@ -11,7 +11,7 @@ In order to get the power monitoring output you'll need to give the palantir use
 
 - Create `/etc/udev/rules.d/99-powermonitoring.rules` with
   ```udev
-  SUBSYSTEM=="powercap", ACTION=="add", RUN+="/bin/chgrp -R powermonitoring /sys%p", RUN+="/bin/chmod -R g=u /sys%p"                                                                                                                                             
+  SUBSYSTEM=="powercap", ACTION=="add", RUN+="/bin/chgrp -R powermonitoring /sys%p", RUN+="/bin/chmod -R g=u /sys%p"
   SUBSYSTEM=="powercap", ACTION=="change", ENV{TRIGGER}!="none", RUN+="/bin/chgrp -R powermonitoring /sys%p", RUN+="/bin/chmod -R g=u /sys%p"
   ```
 
@@ -24,11 +24,11 @@ In order to get the power monitoring output you'll need to give the palantir use
 - Add your user to the group
   
   ```
-  sudo usermod -a G powermonitoring palantir
+  sudo usermod -a -G powermonitoring palantir
   ```
 
 - Verify that you can read energy usage
 
   ```
-  sudo su - palantir -c 'cat /sys/class/powercap/intel-rapl:0:0/energy_uj
+  sudo su - palantir -c 'cat /sys/class/powercap/intel-rapl:0:0/energy_uj'
   ```

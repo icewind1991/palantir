@@ -23,7 +23,7 @@ impl PowerUsage {
         for (i, package) in self.packages_uj.iter().enumerate() {
             writeln!(
                 &mut w,
-                "total_power{{host=\"{}\", package=\"{}\"}} {:.3}",
+                "package_power{{host=\"{}\", package=\"{}\"}} {:.3}",
                 hostname,
                 i,
                 *package as f64 / 1_000_000.0
@@ -37,7 +37,13 @@ pub fn power_usage() -> Result<Option<PowerUsage>> {
         return Ok(None);
     }
 
-    let dir = read_dir("/sys/devices/virtual/powercap/intel-rapl")?;
+    let dir = match read_dir("/sys/devices/virtual/powercap/intel-rapl") {
+        Ok(dir) => dir,
+        Err(_) => {
+            CAN_READ.store(false, Ordering::Relaxed);
+            return Ok(None);
+        }
+    };
     let mut usage = PowerUsage::default();
     for package in dir {
         let package = package?;
