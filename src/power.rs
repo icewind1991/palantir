@@ -62,7 +62,7 @@ pub fn power_usage() -> Result<Option<PowerUsage>> {
                 }
                 result => result,
             }?;
-            let package_usage = dbg!(package_usage.trim().parse::<u64>()?);
+            let package_usage = package_usage.trim().parse::<u64>()?;
             usage.total_uj += package_usage;
             usage.packages_uj.push(package_usage);
         }
