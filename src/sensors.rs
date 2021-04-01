@@ -14,14 +14,15 @@ use std::os::unix::ffi::OsStrExt;
 #[derive(Debug, Clone, Default)]
 pub struct Temperatures {
     cpu: f32,
+    gpu: f32,
 }
 
 impl IntoIterator for Temperatures {
     type Item = (&'static str, f32);
-    type IntoIter = IntoIter<Self::Item, 1>;
+    type IntoIter = IntoIter<Self::Item, 2>;
 
     fn into_iter(self) -> Self::IntoIter {
-        IntoIter::new([("cpu", self.cpu)])
+        IntoIter::new([("cpu", self.cpu), ("gpu", self.gpu)])
     }
 }
 
@@ -49,8 +50,8 @@ pub struct DiskUsage {
 pub fn temperatures() -> Result<Temperatures> {
     let mut temps = Temperatures::default();
 
-    const DESIRED_HW_MON: &[&[u8]] = &[b"k10temp\n", b"coretemp\n"];
-    const DESIRED_SENSORS: &[&[u8]] = &[b"Tdie\n"];
+    const DESIRED_HW_MON: &[&[u8]] = &[b"k10temp\n", b"coretemp\n", b"amdgpu\n"];
+    const DESIRED_SENSORS: &[&[u8]] = &[b"Tdie\n", b"edge\n"];
 
     let mut cores_found = 0.0;
     let mut core_total = 0.0;
@@ -84,6 +85,7 @@ pub fn temperatures() -> Result<Temperatures> {
             let parsed: u32 = value.trim().parse()?;
             match (hwmon_name.as_slice(), label.as_slice()) {
                 (b"k10temp\n", b"Tdie\n") => temps.cpu = parsed as f32 / 1000.0,
+                (b"amdgpu\n", b"edge\n") => temps.gpu = parsed as f32 / 1000.0,
                 (b"coretemp\n", core) if core.starts_with(b"Core") => {
                     cores_found += 1.0;
                     core_total += parsed as f32 / 1000.0

@@ -102,12 +102,14 @@ pub fn get_metrics() -> Result<String> {
         }
     }
     for (label, temp) in temperatures {
-        writeln!(
-            &mut result,
-            "temperature{{host=\"{}\", sensor=\"{}\"}} {:.1}",
-            hostname, label, temp
-        )
-        .ok();
+        if temp != 0.0 {
+            writeln!(
+                &mut result,
+                "temperature{{host=\"{}\", sensor=\"{}\"}} {:.1}",
+                hostname, label, temp
+            )
+            .ok();
+        }
     }
     Ok(result)
 }
