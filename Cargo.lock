@@ -76,7 +76,7 @@ dependencies = [
 [[package]]
 name = "bollard"
 version = "0.10.1"
-source = "git+https://github.com/icewind1991/bollard?branch=stat-one-shot#6e8f4d4d0cd10fe223625747289a0e84cafdefcf"
+source = "git+https://github.com/fussybeaver/bollard#b4b3d74c5e54c3e38ed9999cb14643225dfeed57"
 dependencies = [
  "base64",
  "bollard-stubs",
