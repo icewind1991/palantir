@@ -5,6 +5,7 @@ use futures_util::StreamExt;
 use palantir::docker::{get_docker, stat, Container};
 use palantir::get_metrics;
 use palantir::power::power_usage;
+use palantir::zfs::arcstats;
 use warp::reject::Reject;
 use warp::{Filter, Rejection};
 
@@ -33,6 +34,9 @@ async fn serve_inner(docker: Option<Docker>) -> Result<String> {
     }
     if let Some(power) = power_usage()? {
         power.write(&mut metrics, &hostname);
+    }
+    if let Some(arc) = arcstats()? {
+        arc.write(&mut metrics, &hostname);
     }
     Ok(metrics)
 }

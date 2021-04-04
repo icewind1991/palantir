@@ -32,6 +32,7 @@ impl PowerUsage {
         }
     }
 }
+
 pub fn power_usage() -> Result<Option<PowerUsage>> {
     if !CAN_READ.load(Ordering::Relaxed) {
         return Ok(None);
