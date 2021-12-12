@@ -2,10 +2,12 @@ use bollard::Docker;
 use color_eyre::{Report, Result};
 use futures_util::pin_mut;
 use futures_util::StreamExt;
+use libmdns::Responder;
 use palantir::docker::{get_docker, stat, Container};
 use palantir::get_metrics;
 use palantir::power::power_usage;
 use palantir::zfs::arcstats;
+use tokio::runtime::Handle;
 use warp::reject::Reject;
 use warp::{Filter, Rejection};
 
@@ -63,6 +65,14 @@ async fn main() -> Result<()> {
 
     let docker = get_docker().await;
     let docker = warp::any().map(move || docker.clone());
+
+    let mdns = Responder::spawn(&Handle::current())?;
+    let _svc = mdns.register(
+        "_prometheus-http._tcp".into(),
+        "Palantir prometheus exporter".into(),
+        host_port,
+        &[&"/metrics"],
+    );
 
     let metrics = warp::path!("metrics").and(docker).and_then(serve_metrics);
 
