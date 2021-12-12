@@ -2,15 +2,6 @@
 
 System metrics exporter for prometheus
 
-## Usage
-
-- Download the binary for your architecture from the [releases](https://github.com/icewind1991/palantir/releases/) and place it at `/usr/local/bin/palantir`
-- Place the [palantir.service](palantir.service) file in `/etc/systemd/system/`
-- Create the `palantir` user: `sudo useradd -m palantir`
-- Follow the instructions below to enable power monitoring
-- Start enable enable the server: `sudo systemctl enable --now palantir`
-- Metrics will be available at `localhost:5665/metrics`
-
 ## Exported metrics
 
 - cpu, memory, io, network and disk usage stats
@@ -18,11 +9,21 @@ System metrics exporter for prometheus
 - cpu and gpu temperature (gpu temps only for amd cards)
 - cpu power usage on modern amd and intel platforms
 - docker per-container cpu, memory and network stats
+- 
+## Usage
+
+- Download the binary for your architecture from the [releases](https://github.com/icewind1991/palantir/releases/) and place it at `/usr/local/bin/palantir`
+- Place the [palantir.service](palantir.service) file in `/etc/systemd/system/`
+- Create the `palantir` user: `sudo useradd -m palantir`
+- Start enable enable the server: `sudo systemctl enable --now palantir`
+- Metrics will be available at `localhost:5665/metrics`
+
+Some stats require additional permissions described below.
 
 ## Power monitoring permissions
 
 In recent kernel versions, precise power monitoring is only accessible to root users to prevent using it as a side-channel attack.
-In order to get the power monitoring output you'll need to give the palantir user access to this data using the following steps.
+In order to get the power monitoring output you'll need to give the `palantir` user access to this data using the following steps.
 
 - Create a group using
   
@@ -53,3 +54,11 @@ In order to get the power monitoring output you'll need to give the palantir use
   ```
   sudo su - palantir -c 'cat /sys/class/powercap/intel-rapl:0:0/energy_uj'
   ```
+
+## Docker monitoring permissions
+
+To enable monitoring of docker containers, add the `palantir` user to the `docker` group
+
+```bash
+sudo usermod -a -G docker palantir
+```
