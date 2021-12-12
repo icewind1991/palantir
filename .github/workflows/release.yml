@@ -8,28 +8,34 @@ on:
 jobs:
   release-binaries:
     name: Build release binaries
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - i686-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          - aarch64-unknown-linux-musl
 
     steps:
-      - name: musl-tools
-        run: |
-          sudo apt-get install musl-tools
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
-          target: x86_64-unknown-linux-musl
+          target: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/cargo@v1
+      - name: Build release binary
+        uses: actions-rs/cargo@v1
         with:
+          use-cross: true
           command: build
-          args: --release
-      - name: Upload binary to release --target x86_64-unknown-linux-musl
+          args: --release --target ${{ matrix.target }}
+      - name: Upload amd64 binary to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/x86_64-unknown-linux-musl/release/palantir
-          asset_name: palantir
+          file: target/${{ matrix.target }}/release/palantir
+          asset_name: palantir-${{ matrix.target }}
           tag: ${{ github.ref }}
