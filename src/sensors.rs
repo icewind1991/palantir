@@ -59,6 +59,15 @@ pub fn temperatures() -> Result<Temperatures> {
     for hwmon in read_dir("/sys/class/hwmon")? {
         let hwmon = hwmon?;
         let hwmon_name = read(hwmon.path().join("name"))?;
+
+        // rpi cpu_thermal doesn't have labels, special case it
+        if hwmon_name.as_slice() == b"cpu_thermal\n" {
+            let mut path = hwmon.path();
+            path.push("temp1_input");
+            let value = read_to_string(path)?;
+            let parsed: u32 = value.trim().parse()?;
+            temps.cpu = parsed as f32 / 1000.0
+        }
         if !DESIRED_HW_MON.contains(&hwmon_name.as_slice()) {
             continue;
         }
@@ -242,8 +251,8 @@ pub fn disk_usage() -> Result<impl Iterator<Item = DiskUsage>> {
             let stat = statvfs(&mount_point).ok()?;
             Some(DiskUsage {
                 name: mount_point.into_string().unwrap(),
-                size: stat.f_blocks * stat.f_frsize,
-                free: stat.f_bavail * stat.f_frsize,
+                size: stat.f_blocks * stat.f_frsize as u64,
+                free: stat.f_bavail * stat.f_frsize as u64,
             })
         }))
 }
