@@ -1,3 +1,24 @@
+# Palantir
+
+System metrics exporter for prometheus
+
+## Usage
+
+- Download the binary for your architecture from the [releases](https://github.com/icewind1991/palantir/releases/) and place it at `/usr/local/bin/palantir`
+- Place the [palantir.service](palantir.service) file in `/etc/systemd/system/`
+- Create the `palantir` user: `sudo useradd -m palantir`
+- Follow the instructions below to enable power monitoring
+- Start enable enable the server: `sudo systemctl enable --now palantir`
+- Metrics will be available at `localhost:5665/metrics`
+
+## Exported metrics
+
+- cpu, memory, io, network and disk usage stats
+- zfs pool usage and arc stats
+- cpu and gpu temperature (gpu temps only for amd cards)
+- cpu power usage on modern amd and intel platforms
+- docker per-container cpu, memory and network stats
+
 ## Power monitoring permissions
 
 In recent kernel versions, precise power monitoring is only accessible to root users to prevent using it as a side-channel attack.

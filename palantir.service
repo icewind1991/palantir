@@ -1,0 +1,15 @@
+[Unit]
+Description = palantir
+
+[Service]
+Type=simple
+User=palantir
+Environment=PORT=5665
+ExecStart=/usr/local/bin/palantir
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
