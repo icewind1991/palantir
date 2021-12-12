@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
     let mdns = Responder::spawn(&Handle::current())?;
     let _svc = mdns.register(
         "_prometheus-http._tcp".into(),
-        "Palantir prometheus exporter".into(),
+        hostname::get()?.into_string().unwrap(),
         host_port,
         &[&"/metrics"],
     );
