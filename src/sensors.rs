@@ -207,7 +207,7 @@ pub fn hostname() -> Result<String> {
 
 pub fn disk_stats() -> Result<impl Iterator<Item = IoStats>> {
     static DISK_REGEX: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r" ([sv]d[a-z]+|nvme[0-9]n[0-9]) ").unwrap());
+        Lazy::new(|| Regex::new(r" ([sv]d[a-z]+|nvme[0-9]n[0-9]|mmcblk[0-9]) ").unwrap());
 
     let stat = BufReader::new(File::open("/proc/diskstats")?);
     Ok(stat
