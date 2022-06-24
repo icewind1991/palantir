@@ -51,9 +51,11 @@
         networking.firewall.allowedTCPPorts = [ cfg.port ];
 
         users.groups.palantir = {};
+	users.groups.powermonitoring = {};
         users.users.palantir = {
 	  isSystemUser = true;
 	  group = "palantir";
+	  extraGroups = [ "powermonitoring" ];
 	};
 
 	services.udev.packages = [ self.defaultPackage.${pkgs.system} ];
