@@ -22,7 +22,7 @@ impl IntoIterator for Temperatures {
     type IntoIter = IntoIter<Self::Item, 2>;
 
     fn into_iter(self) -> Self::IntoIter {
-        IntoIter::new([("cpu", self.cpu), ("gpu", self.gpu)])
+        [("cpu", self.cpu), ("gpu", self.gpu)].into_iter()
     }
 }
 

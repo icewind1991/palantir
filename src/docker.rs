@@ -1,5 +1,5 @@
 use bollard::container::{Stats, StatsOptions};
-use bollard::models::ContainerSummaryInner;
+use bollard::models::ContainerSummary;
 use bollard::Docker;
 use color_eyre::Result;
 use futures_util::future::ready;
@@ -45,7 +45,7 @@ impl Container {
         .ok();
     }
 
-    fn from(stats: Stats, container: ContainerSummaryInner) -> Self {
+    fn from(stats: Stats, container: ContainerSummary) -> Self {
         Container {
             name: stats.name,
             image: container.image.unwrap_or_default(),
