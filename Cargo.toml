@@ -18,6 +18,8 @@ ahash = "0.7"
 bollard = "0.13.0"
 futures-util = "0.3"
 libmdns = "0.7"
+tracing = "0.1.33"
+tracing-subscriber = "0.3.11"
 
 [dev-dependencies]
 iai = "0.1"

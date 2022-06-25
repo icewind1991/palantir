@@ -7,7 +7,11 @@ use palantir::docker::{get_docker, stat, Container};
 use palantir::get_metrics;
 use palantir::power::power_usage;
 use palantir::zfs::arcstats;
+use std::time::Duration;
 use tokio::runtime::Handle;
+use tokio::spawn;
+use tokio::time::sleep;
+use tracing::warn;
 use warp::reject::Reject;
 use warp::{Filter, Rejection};
 
@@ -52,6 +56,8 @@ async fn serve_metrics(docker: Option<Docker>) -> Result<String, Rejection> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
     let host_port: u16 = dotenv::var("PORT")
         .ok()
         .map(|port| port.parse())
@@ -66,16 +72,36 @@ async fn main() -> Result<()> {
     let docker = get_docker().await;
     let docker = warp::any().map(move || docker.clone());
 
-    let mdns = Responder::spawn(&Handle::current())?;
-    let _svc = mdns.register(
-        "_prometheus-http._tcp".into(),
+    spawn(setup_mdns(
         hostname::get()?.into_string().unwrap(),
         host_port,
-        &[&"/metrics"],
-    );
+    ));
 
     let metrics = warp::path!("metrics").and(docker).and_then(serve_metrics);
 
     warp::serve(metrics).run(([0, 0, 0, 0], host_port)).await;
     Ok(())
+}
+
+async fn setup_mdns(hostname: String, port: u16) {
+    let mdns = loop {
+        match Responder::spawn(&Handle::current()) {
+            Ok(mdns) => break mdns,
+            Err(e) => {
+                warn!(error = display(e), "Failed to register mdns responder");
+                sleep(Duration::from_secs(5)).await;
+            }
+        }
+    };
+
+    let _svc = mdns.register(
+        "_prometheus-http._tcp".into(),
+        hostname,
+        port,
+        &[&"/metrics"],
+    );
+
+    loop {
+        sleep(Duration::from_secs(60 * 60)).await;
+    }
 }
