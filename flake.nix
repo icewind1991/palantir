@@ -56,6 +56,20 @@
               example = default;
               description = "The port to listen on";
             };
+
+            zfs = mkOption rec {
+              type = types.bool;
+              default = false;
+              example = true;
+              description = "enable zfs integration";
+            };
+
+            docker = mkOption rec {
+              type = types.bool;
+              default = false;
+              example = true;
+              description = "enable docker integration";
+            };
           };
 
           config = mkIf cfg.enable {
@@ -66,13 +80,14 @@
             users.users.palantir = {
               isSystemUser = true;
               group = "palantir";
-              extraGroups = ["powermonitoring"];
+              extraGroups = ["powermonitoring"] ++ lib.optional cfg.docker "docker";
             };
 
             services.udev.packages = [self.defaultPackage.${pkgs.system}];
 
             systemd.services."palantir" = {
               wantedBy = ["multi-user.target"];
+              path = lib.optional cfg.zfs pkgs.zfs;
 
               serviceConfig = let
                 pkg = self.defaultPackage.${pkgs.system};
