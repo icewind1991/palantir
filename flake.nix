@@ -70,10 +70,25 @@
               example = true;
               description = "enable docker integration";
             };
+
+            openPort = mkOption rec {
+              type = types.bool;
+              default = false;
+              example = true;
+              description = "open port";
+            };
+
+            openMDNSPort = mkOption rec {
+              type = types.bool;
+              default = false;
+              example = true;
+              description = "open mdns port";
+            };
           };
 
           config = mkIf cfg.enable {
-            networking.firewall.allowedTCPPorts = [cfg.port];
+            networking.firewall.allowedTCPPorts = lib.optional cfg.openPort cfg.port;
+            networking.firewall.allowedUDPPorts = lib.optional cfg.openMDNSPort 5353;
 
             users.groups.palantir = {};
             users.groups.powermonitoring = {};
