@@ -34,7 +34,7 @@
 
       # `nix develop`
       devShell = pkgs.mkShell {
-        nativeBuildInputs = with pkgs; [rustc cargo];
+        nativeBuildInputs = with pkgs; [rustc cargo bacon];
       };
     })
     // {
@@ -71,6 +71,13 @@
               description = "enable docker integration";
             };
 
+            mdns = mkOption rec {
+              type = types.bool;
+              default = true;
+              example = true;
+              description = "enable mdns discovery";
+            };
+
             openPort = mkOption rec {
               type = types.bool;
               default = false;
@@ -103,6 +110,11 @@
             systemd.services."palantir" = {
               wantedBy = ["multi-user.target"];
               path = lib.optional cfg.zfs pkgs.zfs;
+              environment = {
+                PORT = "${toString cfg.port}";
+              } // (if (cfg.mdns == false) then {
+                DISABLE_MDNS = "true";
+              } else {});
 
               serviceConfig = let
                 pkg = self.defaultPackage.${pkgs.system};
@@ -110,7 +122,6 @@
                 Restart = "on-failure";
                 ExecStart = "${pkg}/bin/palantir";
                 User = "palantir";
-                Environment = "PORT=${toString cfg.port}";
                 PrivateTmp = true;
                 ProtectSystem = "full";
                 ProtectHome = true;

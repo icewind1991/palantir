@@ -64,6 +64,8 @@ async fn main() -> Result<()> {
         .transpose()?
         .unwrap_or(80);
 
+    let mdns = dotenv::var("DISABLE_MDNS").is_ok();
+
     ctrlc::set_handler(move || {
         std::process::exit(0);
     })
@@ -72,10 +74,12 @@ async fn main() -> Result<()> {
     let docker = get_docker().await;
     let docker = warp::any().map(move || docker.clone());
 
-    spawn(setup_mdns(
-        hostname::get()?.into_string().unwrap(),
-        host_port,
-    ));
+    if !mdns {
+        spawn(setup_mdns(
+            hostname::get()?.into_string().unwrap(),
+            host_port,
+        ));
+    }
 
     let metrics = warp::path!("metrics").and(docker).and_then(serve_metrics);
 
