@@ -97,13 +97,7 @@
             networking.firewall.allowedTCPPorts = lib.optional cfg.openPort cfg.port;
             networking.firewall.allowedUDPPorts = lib.optional cfg.openMDNSPort 5353;
 
-            users.groups.palantir = {};
             users.groups.powermonitoring = {};
-            users.users.palantir = {
-              isSystemUser = true;
-              group = "palantir";
-              extraGroups = ["powermonitoring"] ++ lib.optional cfg.docker "docker";
-            };
 
             services.udev.packages = [self.defaultPackage.${pkgs.system}];
 
@@ -121,11 +115,30 @@
               in {
                 Restart = "on-failure";
                 ExecStart = "${pkg}/bin/palantir";
-                User = "palantir";
+                DynamicUser = true;
                 PrivateTmp = true;
-                ProtectSystem = "full";
+                PrivateUsers = true;
+                ProtectSystem = "strict";
                 ProtectHome = true;
                 NoNewPrivileges = true;
+                ProtectClock = true;
+                CapabilityBoundingSet = true;
+                ProtectKernelLogs = true;
+                ProtectControlGroups = true;
+                SystemCallArchitectures = "native";
+                ProtectKernelModules = true;
+                RestrictNamespaces = true;
+                MemoryDenyWriteExecute = true;
+                ProtectHostname = true;
+                LockPersonality = true;
+                ProtectKernelTunables = true;
+                DevicePolicy = "closed";
+                RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_NETLINK"] ++ lib.optional cfg.docker "AF_UNIX"; # netlink is required to make `getifaddrs` not err
+                RestrictRealtime = true;
+                SystemCallFilter = ["@system-service" "~@resources" "~@privileged"];
+                IPAddressAllow = ["localhost"] ++ lib.optional cfg.mdns "multicast";
+                UMask = "0077";
+                SupplementaryGroups = ["powermonitoring"] ++ lib.optional cfg.docker "docker";
               };
             };
           };
