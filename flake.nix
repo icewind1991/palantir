@@ -121,7 +121,7 @@
                 ProtectSystem = "strict";
                 ProtectHome = true;
                 NoNewPrivileges = true;
-                ProtectClock = true;
+                ProtectClock = !cfg.zfs; # Enabling this breaks libzfs
                 CapabilityBoundingSet = true;
                 ProtectKernelLogs = true;
                 ProtectControlGroups = true;
@@ -132,7 +132,6 @@
                 ProtectHostname = true;
                 LockPersonality = true;
                 ProtectKernelTunables = true;
-                DevicePolicy = "closed";
                 RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_NETLINK"] ++ lib.optional cfg.docker "AF_UNIX"; # netlink is required to make `getifaddrs` not err
                 RestrictRealtime = true;
                 SystemCallFilter = ["@system-service" "~@resources" "~@privileged"];
