@@ -4,8 +4,16 @@ use std::fmt::Write;
 use std::fs::read_to_string;
 use std::process::Command;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tracing::warn;
+
+static CAN_READ: AtomicBool = AtomicBool::new(true);
 
 pub fn pools() -> impl Iterator<Item = DiskUsage> {
+    if !CAN_READ.load(Ordering::Relaxed) {
+        return ZPoolOutputParser::default();
+    }
+
     ZPoolOutputParser {
         str: zpool_command().unwrap_or_default(),
         pos: 0,
@@ -19,6 +27,13 @@ fn zpool_command() -> Result<String> {
     if out.status.success() {
         Ok(String::from_utf8(out.stdout)?)
     } else {
+        CAN_READ.store(false, Ordering::Relaxed);
+        warn!(
+            status = out.status.code().unwrap_or(-1),
+            stdout = String::from_utf8(out.stdout).unwrap_or_else(|_| String::from("non utf8")),
+            stderr = String::from_utf8(out.stderr).unwrap_or_else(|_| String::from("non utf8")),
+            "Failed to list zpool status"
+        );
         Ok(String::new())
     }
 }
@@ -31,6 +46,7 @@ fn parse_line(line: &str) -> Option<DiskUsage> {
     Some(DiskUsage { name, size, free })
 }
 
+#[derive(Default)]
 struct ZPoolOutputParser {
     str: String,
     pos: usize,
