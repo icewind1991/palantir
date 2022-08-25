@@ -21,6 +21,7 @@ libmdns = "0.7.0"
 tracing = "0.1.35"
 tracing-subscriber = "0.3.11"
 nvml-wrapper = "0.8.0"
+if-addrs = "0.7.0"
 
 [dev-dependencies]
 iai = "0.1.1"

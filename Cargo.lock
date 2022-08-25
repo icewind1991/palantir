@@ -852,6 +852,7 @@ dependencies = [
  "futures-util",
  "hostname",
  "iai",
+ "if-addrs",
  "libc",
  "libmdns",
  "nvml-wrapper",
