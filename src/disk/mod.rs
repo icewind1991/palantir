@@ -59,6 +59,7 @@ pub fn disk_usage() -> Result<impl Iterator<Item = DiskUsage>> {
         .filter_map(Result::ok)
         .filter(|line| line.starts_with('/'))
         .filter(|line| !line.contains("/dev/loop"))
+        .filter(|line| !line.contains("fuse"))
         .filter_map(move |line: String| {
             let mut parts = line.split_ascii_whitespace();
             let disk = parts.next()?;
