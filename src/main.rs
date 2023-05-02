@@ -6,6 +6,7 @@ use libmdns::Responder;
 use palantir::disk::zfs::arcstats;
 use palantir::docker::{get_docker, stat, Container};
 use palantir::get_metrics;
+use palantir::gpu::gpu_metrics;
 use palantir::power::power_usage;
 use std::time::Duration;
 use tokio::runtime::Handle;
@@ -44,6 +45,8 @@ async fn serve_inner(docker: Option<Docker>) -> Result<String> {
     if let Some(arc) = arcstats()? {
         arc.write(&mut metrics, &hostname);
     }
+    gpu_metrics(&mut metrics, &hostname);
+
     Ok(metrics)
 }
 
@@ -58,13 +61,13 @@ async fn serve_metrics(docker: Option<Docker>) -> Result<String, Rejection> {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let host_port: u16 = dotenv::var("PORT")
+    let host_port: u16 = dotenvy::var("PORT")
         .ok()
         .map(|port| port.parse())
         .transpose()?
         .unwrap_or(80);
 
-    let mdns = dotenv::var("DISABLE_MDNS").is_ok();
+    let mdns = dotenvy::var("DISABLE_MDNS").is_ok();
 
     ctrlc::set_handler(move || {
         std::process::exit(0);

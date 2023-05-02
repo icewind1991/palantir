@@ -106,6 +106,7 @@
               path = lib.optional cfg.zfs pkgs.zfs;
               environment = {
                 PORT = "${toString cfg.port}";
+                LD_LIBRARY_PATH = "/run/opengl-driver/lib/"; # needed for nvidia
               } // (if (cfg.mdns == false) then {
                 DISABLE_MDNS = "true";
               } else {});

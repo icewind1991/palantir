@@ -88,7 +88,7 @@ pub fn temperatures() -> Result<Temperatures> {
         temps.cpu = core_total / cores_found
     }
 
-    if let Some(nvidia_temperature) = crate::nvidia::temperature() {
+    if let Some(nvidia_temperature) = crate::gpu::nvidia::temperature() {
         temps.gpu = nvidia_temperature;
     }
 

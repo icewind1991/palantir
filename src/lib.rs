@@ -1,6 +1,6 @@
 pub mod disk;
 pub mod docker;
-pub mod nvidia;
+pub mod gpu;
 pub mod power;
 pub mod sensors;
 

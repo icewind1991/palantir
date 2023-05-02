@@ -84,7 +84,7 @@ pub fn power_usage() -> Result<Option<PowerUsage>> {
         }
     }
 
-    if let Some(nvidia_power) = crate::nvidia::power() {
+    if let Some(nvidia_power) = crate::gpu::nvidia::power() {
         usage.gpu_uj = nvidia_power;
     }
 
