@@ -3,15 +3,15 @@ use color_eyre::{Report, Result};
 use futures_util::pin_mut;
 use futures_util::StreamExt;
 use libmdns::Responder;
+use palantir::disk::zfs::arcstats;
 use palantir::docker::{get_docker, stat, Container};
 use palantir::get_metrics;
 use palantir::power::power_usage;
-use palantir::zfs::arcstats;
 use std::time::Duration;
 use tokio::runtime::Handle;
 use tokio::spawn;
 use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::warn;
 use warp::reject::Reject;
 use warp::{Filter, Rejection};
 

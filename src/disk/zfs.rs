@@ -1,4 +1,4 @@
-use crate::sensors::DiskUsage;
+use crate::disk::DiskUsage;
 use color_eyre::Result;
 use std::fmt::Write;
 use std::fs::read_to_string;

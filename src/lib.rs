@@ -1,12 +1,13 @@
+pub mod disk;
 pub mod docker;
 pub mod nvidia;
 pub mod power;
 pub mod sensors;
-pub mod zfs;
 
-use crate::sensors::temperatures;
+use crate::disk::disk_usage;
+use crate::disk::zfs::pools;
+use crate::disk::*;
 use crate::sensors::*;
-use crate::zfs::pools;
 use color_eyre::Result;
 use std::fmt::Write;
 
