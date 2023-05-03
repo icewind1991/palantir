@@ -1,7 +1,13 @@
 use crate::sensors::Memory;
 use std::fmt::Write;
-use std::fs::read_to_string;
+use std::fs::{read_to_string, File};
+use std::io::{Read, Seek};
+use std::path::Path;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 pub mod nvidia;
 
@@ -80,4 +86,48 @@ pub fn utilization() -> impl Iterator<Item = GpuUsage> {
         })
     });
     drm.chain(nv_usage)
+}
+
+static GPU_POWER_UJ: AtomicU64 = AtomicU64::new(0);
+static GPU_POWER_LAST_READ: Mutex<Option<Instant>> = Mutex::new(None);
+
+fn read_gpu_power() -> Option<u64> {
+    read_num("/sys/class/drm/card0/device/hwmon/hwmon0/power1_average")
+}
+
+fn get_gpu_power_elapsed() -> Option<Duration> {
+    let mut last_read = GPU_POWER_LAST_READ.lock().unwrap();
+    let now = Instant::now();
+    let elapsed = last_read.as_ref().map(|last_read| now - *last_read);
+    *last_read = Some(now);
+    elapsed
+}
+
+pub fn update_gpu_power() {
+    let mut buff = String::with_capacity(16);
+    if let Ok(mut file) = File::open("/sys/class/drm/card0/device/hwmon/hwmon0/power1_average") {
+        loop {
+            if let Some(elapsed) = get_gpu_power_elapsed() {
+                buff.clear();
+                file.rewind().ok();
+                let current_power: u64 = match file.read_to_string(&mut buff) {
+                    Ok(_) => buff.trim().parse().unwrap_or_default(),
+                    Err(_) => {
+                        return;
+                    }
+                };
+
+                let elapsed_milli = elapsed.as_millis() as u64;
+
+                let power = current_power * elapsed_milli / 1000;
+
+                GPU_POWER_UJ.fetch_add(power, Ordering::SeqCst);
+            }
+            sleep(Duration::from_millis(500));
+        }
+    }
+}
+
+pub fn gpu_power() -> u64 {
+    GPU_POWER_UJ.load(Ordering::SeqCst)
 }

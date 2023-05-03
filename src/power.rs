@@ -1,3 +1,4 @@
+use crate::gpu::gpu_power;
 use color_eyre::{Report, Result};
 use std::fmt::Write;
 use std::fs::{read_dir, read_to_string};
@@ -84,6 +85,7 @@ pub fn power_usage() -> Result<Option<PowerUsage>> {
         }
     }
 
+    usage.gpu_uj = gpu_power();
     if let Some(nvidia_power) = crate::gpu::nvidia::power() {
         usage.gpu_uj = nvidia_power;
     }

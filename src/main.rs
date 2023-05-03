@@ -6,7 +6,7 @@ use libmdns::Responder;
 use palantir::disk::zfs::arcstats;
 use palantir::docker::{get_docker, stat, Container};
 use palantir::get_metrics;
-use palantir::gpu::gpu_metrics;
+use palantir::gpu::{gpu_metrics, update_gpu_power};
 use palantir::power::power_usage;
 use std::time::Duration;
 use tokio::runtime::Handle;
@@ -83,6 +83,8 @@ async fn main() -> Result<()> {
             host_port,
         ));
     }
+
+    std::thread::spawn(update_gpu_power);
 
     let metrics = warp::path!("metrics").and(docker).and_then(serve_metrics);
 
