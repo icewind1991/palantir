@@ -1,11 +1,11 @@
 use crate::disk::IoStats;
 use crate::hwmon::{Device, FileSource};
-use crate::{Error, Result, SensorData, SensorSource};
+use crate::{Error, MultiSensorSource, Result, SensorData, SensorSource};
 use std::array::IntoIter;
 use std::fmt::Write;
 use std::fs::File;
 use std::io;
-use std::io::{BufRead, BufReader, ErrorKind, Seek};
+use std::io::{BufRead, BufReader, ErrorKind, Read, Seek};
 use sysconf::{sysconf, SysconfVariable};
 
 #[derive(Debug, Clone, Default)]
@@ -201,49 +201,89 @@ impl SensorSource for CpuTimeSource {
     }
 }
 
-pub fn network_stats() -> Result<impl Iterator<Item = IoStats>> {
-    let stat = BufReader::new(File::open("/proc/net/dev")?);
-    Ok(stat
-        .lines()
-        .filter_map(Result::ok)
-        .filter(|line: &String| {
-            let trimmed = line.trim_start();
-            trimmed.starts_with("en") || trimmed.starts_with("eth")
+pub struct NetworkSource {
+    source: File,
+    buff: String,
+}
+
+impl NetworkSource {
+    pub fn new() -> Result<NetworkSource> {
+        Ok(NetworkSource {
+            source: File::open("/proc/net/dev")?,
+            buff: String::new(),
         })
-        .filter_map(|line: String| {
-            let mut parts = line.trim_start().split_ascii_whitespace();
-            if let (
-                Some(interface),
-                Some(bytes_received),
-                _packets,
-                _err,
-                _drop,
-                _fifo,
-                _frame,
-                _compressed,
-                _multicast,
-                Some(bytes_sent),
-            ) = (
-                parts.next(),
-                parts.next(),
-                parts.next(),
-                parts.next(),
-                parts.next(),
-                parts.next(),
-                parts.next(),
-                parts.next(),
-                parts.next(),
-                parts.next(),
-            ) {
-                Some(IoStats {
-                    interface: interface.trim_end_matches(':').into(),
-                    bytes_sent: bytes_sent.parse().ok()?,
-                    bytes_received: bytes_received.parse().ok()?,
-                })
-            } else {
-                None
+    }
+
+    fn parse_line(line: &str) -> Result<IoStats> {
+        let mut parts = line.trim_start().split_ascii_whitespace();
+        if let (
+            Some(interface),
+            Some(bytes_received),
+            _packets,
+            _err,
+            _drop,
+            _fifo,
+            _frame,
+            _compressed,
+            _multicast,
+            Some(bytes_sent),
+        ) = (
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+        ) {
+            Ok(IoStats {
+                interface: interface.trim_end_matches(':').into(),
+                bytes_sent: bytes_sent.parse()?,
+                bytes_received: bytes_received.parse()?,
+            })
+        } else {
+            Err(Error::Io(ErrorKind::InvalidData.into()))
+        }
+    }
+}
+
+impl MultiSensorSource for NetworkSource {
+    type Data = IoStats;
+    type Iter<'a> = NetworkStatParser<'a>;
+
+    fn read(&mut self) -> Result<Self::Iter<'_>> {
+        self.buff.clear();
+        self.source.rewind()?;
+        self.source.read_to_string(&mut self.buff)?;
+
+        Ok(NetworkStatParser {
+            lines: self.buff.lines(),
+        })
+    }
+}
+
+pub struct NetworkStatParser<'a> {
+    lines: std::str::Lines<'a>,
+}
+
+impl<'a> Iterator for NetworkStatParser<'a> {
+    type Item = Result<IoStats>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let line = loop {
+            let line = self.lines.next()?;
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("en") || trimmed.starts_with("eth") || trimmed.starts_with("wlp")
+            {
+                break trimmed;
             }
-        }))
+        };
+
+        Some(NetworkSource::parse_line(line))
+    }
 }
 
 pub fn hostname() -> Result<String> {

@@ -53,8 +53,9 @@ pub fn get_metrics() -> Result<String> {
     let memory = memory()?;
     let mut temp_source = TemperatureSource::new()?;
     let temperatures = temp_source.read()?;
+    let mut net_source = NetworkSource::new()?;
+    let networks = net_source.read()?;
     let pools = pools();
-    let networks = network_stats()?;
     let mut result = String::with_capacity(256);
 
     cpu.write(&mut result, &hostname);
@@ -75,19 +76,8 @@ pub fn get_metrics() -> Result<String> {
         .ok();
     }
     for network in networks {
-        if network.bytes_received > 0 || network.bytes_sent > 0 {
-            writeln!(
-                &mut result,
-                "net_sent{{host=\"{}\", network=\"{}\"}} {}",
-                hostname, network.interface, network.bytes_sent
-            )
-            .ok();
-            writeln!(
-                &mut result,
-                "net_received{{host=\"{}\", network=\"{}\"}} {}",
-                hostname, network.interface, network.bytes_received
-            )
-            .ok();
+        if let Ok(network) = network {
+            network.write(&mut result, &hostname);
         }
     }
     for disk in disks {
@@ -145,4 +135,13 @@ pub trait SensorSource {
     type Data: SensorData;
 
     fn read(&mut self) -> Result<Self::Data>;
+}
+
+pub trait MultiSensorSource {
+    type Data: SensorData;
+    type Iter<'a>: Iterator<Item = Result<Self::Data>>
+    where
+        Self: 'a;
+
+    fn read(&mut self) -> Result<Self::Iter<'_>>;
 }

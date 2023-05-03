@@ -1,8 +1,9 @@
-use crate::{Error, Result};
+use crate::{Error, Result, SensorData};
 use ahash::{AHashSet, AHasher};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::ffi::CString;
+use std::fmt::Write;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader};
@@ -15,6 +16,25 @@ pub struct IoStats {
     pub interface: String,
     pub bytes_sent: u64,
     pub bytes_received: u64,
+}
+
+impl SensorData for IoStats {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        if self.bytes_received > 0 || self.bytes_sent > 0 {
+            writeln!(
+                &mut w,
+                "net_sent{{host=\"{}\", network=\"{}\"}} {}",
+                hostname, self.interface, self.bytes_sent
+            )
+            .ok();
+            writeln!(
+                &mut w,
+                "net_received{{host=\"{}\", network=\"{}\"}} {}",
+                hostname, self.interface, self.bytes_received
+            )
+            .ok();
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
