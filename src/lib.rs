@@ -10,6 +10,10 @@ use crate::disk::*;
 use crate::sensors::*;
 use color_eyre::Result;
 use std::fmt::Write;
+use std::fs::File;
+use std::io::{ErrorKind, Read, Seek};
+use std::path::Path;
+use std::str::FromStr;
 
 pub fn get_metrics() -> Result<String> {
     let disk_usage = disk_usage()?;
@@ -114,4 +118,32 @@ pub fn get_metrics() -> Result<String> {
         }
     }
     Ok(result)
+}
+
+pub struct FileSource {
+    buff: String,
+    file: File,
+}
+
+impl FileSource {
+    pub fn open<P: AsRef<Path>>(path: P) -> std::io::Result<FileSource> {
+        Ok(FileSource {
+            buff: String::with_capacity(32),
+            file: File::open(path)?,
+        })
+    }
+
+    pub fn read<T>(&mut self) -> std::io::Result<T>
+    where
+        T: FromStr,
+        <T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
+    {
+        self.buff.clear();
+        self.file.rewind()?;
+        self.file.read_to_string(&mut self.buff)?;
+        self.buff
+            .trim()
+            .parse()
+            .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))
+    }
 }
