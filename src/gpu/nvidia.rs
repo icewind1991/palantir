@@ -16,7 +16,10 @@ pub fn temperature() -> Option<f32> {
 }
 
 pub fn power() -> Option<u64> {
-    device()?.total_energy_consumption().ok()
+    device()?
+        .total_energy_consumption()
+        .ok()
+        .map(|mj| mj * 1_000)
 }
 
 pub fn memory() -> Option<Memory> {
