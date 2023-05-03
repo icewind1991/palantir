@@ -1,5 +1,5 @@
+use crate::{Error, Result};
 use ahash::{AHashSet, AHasher};
-use color_eyre::{Report, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::ffi::CString;
@@ -85,7 +85,7 @@ fn statvfs(path: &str) -> Result<libc::statvfs> {
         let vfs = unsafe { vfs.assume_init() };
         Ok(vfs)
     } else {
-        Err(Report::msg("Failed to stat vfs"))
+        Err(Error::StatVfs)
     }
 }
 

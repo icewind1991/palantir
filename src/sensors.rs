@@ -1,12 +1,12 @@
 use crate::disk::IoStats;
 use crate::hwmon::{Device, FileSource};
-use crate::{SensorData, SensorSource};
-use color_eyre::{Report, Result};
+use crate::{Error, Result, SensorData, SensorSource};
 use std::array::IntoIter;
 use std::fmt::Write;
 use std::fs::File;
 use std::io;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, ErrorKind, Seek};
+use sysconf::{sysconf, SysconfVariable};
 
 #[derive(Debug, Clone, Default)]
 pub struct Temperatures {
@@ -69,7 +69,7 @@ pub struct TemperatureSource {
 }
 
 impl TemperatureSource {
-    pub fn new() -> io::Result<TemperatureSource> {
+    pub fn new() -> Result<TemperatureSource> {
         let mut cpu_sensors = Vec::new();
         let mut gpu_sensors = Vec::new();
 
@@ -117,7 +117,7 @@ fn average_sensors(sensors: &mut [FileSource]) -> f32 {
 impl SensorSource for TemperatureSource {
     type Data = Temperatures;
 
-    fn read(&mut self) -> io::Result<Self::Data> {
+    fn read(&mut self) -> Result<Self::Data> {
         Ok(Temperatures {
             cpu: average_sensors(&mut self.cpu_sensors) / 1000.0,
             gpu: average_sensors(&mut self.gpu_sensors) / 1000.0,
@@ -150,21 +150,54 @@ pub fn memory() -> Result<Memory> {
     Ok(mem)
 }
 
-pub fn cpu_time() -> Result<f32> {
-    let stat = BufReader::new(File::open("/proc/stat")?);
-    let line = stat
-        .lines()
-        .next()
-        .ok_or_else(|| Report::msg("Invalid /proc/stat"))??;
-    let mut parts = line.split_ascii_whitespace();
-    if let (_cpu, Some(user), _nice, Some(system)) =
-        (parts.next(), parts.next(), parts.next(), parts.next())
-    {
-        let user: f32 = user.parse()?;
-        let system: f32 = system.parse()?;
-        Ok((user + system) / (clock_ticks()? as f32) / (cpu_count()? as f32))
-    } else {
-        Err(Report::msg("Invalid /proc/stat"))
+pub struct CpuTime(f32);
+
+impl SensorData for CpuTime {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        writeln!(w, "cpu_time{{host=\"{}\"}} {:.3}", hostname, self.0).ok();
+    }
+}
+
+pub struct CpuTimeSource {
+    source: BufReader<File>,
+    buff: Vec<u8>,
+    cpu_count: f32,
+}
+
+impl CpuTimeSource {
+    pub fn new() -> Result<CpuTimeSource> {
+        Ok(CpuTimeSource {
+            source: BufReader::new(File::open("/proc/stat")?),
+            buff: Vec::new(),
+            cpu_count: sysconf(SysconfVariable::ScNprocessorsOnln)? as f32,
+        })
+    }
+}
+
+impl SensorSource for CpuTimeSource {
+    type Data = CpuTime;
+
+    fn read(&mut self) -> Result<Self::Data> {
+        self.buff.clear();
+        self.source.rewind()?;
+
+        self.source.read_until(b'\n', &mut self.buff)?;
+
+        let line = std::str::from_utf8(&self.buff)?;
+
+        let mut parts = line.split_ascii_whitespace();
+        if let (_cpu, Some(user), _nice, Some(system)) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        {
+            let user: f32 = user.parse()?;
+            let system: f32 = system.parse()?;
+            let clock_ticks = sysconf(SysconfVariable::ScClkTck)?;
+            Ok(CpuTime(
+                (user + system) / (clock_ticks as f32) / self.cpu_count,
+            ))
+        } else {
+            Err(io::Error::from(ErrorKind::InvalidData).into())
+        }
     }
 }
 
@@ -216,25 +249,5 @@ pub fn network_stats() -> Result<impl Iterator<Item = IoStats>> {
 pub fn hostname() -> Result<String> {
     hostname::get()?
         .into_string()
-        .map_err(|_| Report::msg("non utf8 hostname"))
-}
-
-pub fn clock_ticks() -> Result<u64> {
-    let result = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
-
-    if result > 0 {
-        Ok(result as u64)
-    } else {
-        Err(Report::msg("Failed to get clock ticks"))
-    }
-}
-
-fn cpu_count() -> Result<u64> {
-    let result = unsafe { libc::sysconf(libc::_SC_NPROCESSORS_ONLN) };
-
-    if result < 0 {
-        Err(Report::msg("Failed to get cpu count"))
-    } else {
-        Ok(result as u64)
-    }
+        .map_err(|_| Error::InvalidHostName)
 }

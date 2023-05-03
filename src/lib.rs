@@ -9,14 +9,46 @@ use crate::disk::disk_usage;
 use crate::disk::zfs::pools;
 use crate::disk::*;
 use crate::sensors::*;
-use color_eyre::Result;
+use std::ffi::NulError;
 use std::fmt::Write;
 use std::io;
+use std::num::{ParseFloatError, ParseIntError};
+use std::str::Utf8Error;
+use sysconf::SysconfError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error("Unsupported sysconf")]
+    Sysconf(SysconfError),
+    #[error("Non UTF8 hostname")]
+    InvalidHostName,
+    #[error(transparent)]
+    InvalidIntData(#[from] ParseIntError),
+    #[error(transparent)]
+    InvalidFloatData(#[from] ParseFloatError),
+    #[error(transparent)]
+    InvalidStringData(#[from] Utf8Error),
+    #[error(transparent)]
+    InvalidCStringData(#[from] NulError),
+    #[error("Failed to query vfs stats")]
+    StatVfs,
+}
+
+impl From<SysconfError> for Error {
+    fn from(value: SysconfError) -> Self {
+        Error::Sysconf(value)
+    }
+}
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub fn get_metrics() -> Result<String> {
     let disk_usage = disk_usage()?;
     let disks = disk_stats()?;
-    let cpu = cpu_time()?;
+    let mut cpu_source = CpuTimeSource::new()?;
+    let cpu = cpu_source.read()?;
     let hostname = hostname()?;
     let memory = memory()?;
     let mut temp_source = TemperatureSource::new()?;
@@ -24,8 +56,8 @@ pub fn get_metrics() -> Result<String> {
     let pools = pools();
     let networks = network_stats()?;
     let mut result = String::with_capacity(256);
-    writeln!(&mut result, "cpu_time{{host=\"{}\"}} {:.3}", hostname, cpu).ok();
 
+    cpu.write(&mut result, &hostname);
     memory.write(&mut result, &hostname);
 
     for pool in pools {
@@ -112,5 +144,5 @@ pub trait SensorData {
 pub trait SensorSource {
     type Data: SensorData;
 
-    fn read(&mut self) -> io::Result<Self::Data>;
+    fn read(&mut self) -> Result<Self::Data>;
 }
