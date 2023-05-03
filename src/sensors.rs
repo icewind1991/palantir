@@ -125,29 +125,45 @@ impl SensorSource for TemperatureSource {
     }
 }
 
-pub fn memory() -> Result<Memory> {
-    let mut meminfo = BufReader::new(File::open("/proc/meminfo")?);
-    let mut mem = Memory::default();
-    let mut line = String::new();
-    loop {
-        line.clear();
-        meminfo.read_line(&mut line)?;
-        if line.is_empty() {
-            break;
-        }
-        if let Some(line) = line.strip_suffix(" kB\n") {
-            if let Some(line_total) = line.strip_prefix("MemTotal: ") {
-                mem.total = line_total.trim().parse::<u64>()? * 1000;
-            }
-            if let Some(line_free) = line.strip_prefix("MemFree: ") {
-                mem.free = line_free.trim().parse::<u64>()? * 1000;
-            }
-            if let Some(line_available) = line.strip_prefix("MemAvailable: ") {
-                mem.available = line_available.trim().parse::<u64>()? * 1000;
-            }
-        }
+pub struct MemorySource {
+    source: File,
+    buff: String,
+}
+
+impl MemorySource {
+    pub fn new() -> Result<MemorySource> {
+        Ok(MemorySource {
+            source: File::open("/proc/meminfo")?,
+            buff: String::new(),
+        })
     }
-    Ok(mem)
+}
+
+impl SensorSource for MemorySource {
+    type Data = Memory;
+
+    fn read(&mut self) -> Result<Self::Data> {
+        self.buff.clear();
+        self.source.rewind()?;
+        self.source.read_to_string(&mut self.buff)?;
+
+        let mut mem = Memory::default();
+        for line in self.buff.lines() {
+            if let Some(line) = line.strip_suffix(" kB") {
+                if let Some(line_total) = line.strip_prefix("MemTotal: ") {
+                    mem.total = line_total.trim().parse::<u64>()? * 1000;
+                }
+                if let Some(line_free) = line.strip_prefix("MemFree: ") {
+                    mem.free = line_free.trim().parse::<u64>()? * 1000;
+                }
+                if let Some(line_available) = line.strip_prefix("MemAvailable: ") {
+                    mem.available = line_available.trim().parse::<u64>()? * 1000;
+                }
+            }
+        }
+
+        Ok(mem)
+    }
 }
 
 pub struct CpuTime(f32);

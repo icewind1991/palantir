@@ -50,6 +50,7 @@ pub struct Sensors {
     cpu: Mutex<CpuTimeSource>,
     temp: Mutex<TemperatureSource>,
     net: Mutex<NetworkSource>,
+    mem: Mutex<MemorySource>,
 }
 
 impl Sensors {
@@ -59,6 +60,7 @@ impl Sensors {
             cpu: Mutex::new(CpuTimeSource::new()?),
             temp: Mutex::new(TemperatureSource::new()?),
             net: Mutex::new(NetworkSource::new()?),
+            mem: Mutex::new(MemorySource::new()?),
         })
     }
 }
@@ -68,7 +70,7 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
     let disk_usage = disk_usage()?;
     let disks = disk_stats()?;
     let cpu = sensors.cpu.lock().unwrap().read()?;
-    let memory = memory()?;
+    let memory = sensors.mem.lock().unwrap().read()?;
     let temperatures = sensors.temp.lock().unwrap().read()?;
     let mut net = sensors.net.lock().unwrap();
     let networks = net.read()?;
