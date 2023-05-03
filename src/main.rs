@@ -5,9 +5,10 @@ use futures_util::StreamExt;
 use libmdns::Responder;
 use palantir::disk::zfs::arcstats;
 use palantir::docker::{get_docker, stat, Container};
-use palantir::get_metrics;
 use palantir::gpu::{gpu_metrics, update_gpu_power};
 use palantir::power::power_usage;
+use palantir::{get_metrics, Sensors};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Handle;
 use tokio::spawn;
@@ -28,30 +29,29 @@ impl From<Report> for ReportRejection {
 
 impl Reject for ReportRejection {}
 
-async fn serve_inner(docker: Option<Docker>) -> Result<String> {
-    let mut metrics = get_metrics()?;
-    let hostname = palantir::sensors::hostname()?;
+async fn serve_inner(docker: Option<Docker>, sensors: &Sensors) -> Result<String> {
+    let mut metrics = get_metrics(sensors)?;
     if let Some(docker) = docker {
         let containers = stat(docker).await?;
         pin_mut!(containers);
         while let Some(container) = containers.next().await {
             let container: Container = container;
-            container.write(&mut metrics, &hostname);
+            container.write(&mut metrics, &sensors.hostname);
         }
     }
     if let Some(power) = power_usage()? {
-        power.write(&mut metrics, &hostname);
+        power.write(&mut metrics, &sensors.hostname);
     }
     if let Some(arc) = arcstats()? {
-        arc.write(&mut metrics, &hostname);
+        arc.write(&mut metrics, &sensors.hostname);
     }
-    gpu_metrics(&mut metrics, &hostname);
+    gpu_metrics(&mut metrics, &sensors.hostname);
 
     Ok(metrics)
 }
 
-async fn serve_metrics(docker: Option<Docker>) -> Result<String, Rejection> {
-    serve_inner(docker)
+async fn serve_metrics(docker: Option<Docker>, sensors: Arc<Sensors>) -> Result<String, Rejection> {
+    serve_inner(docker, &sensors)
         .await
         .map_err(ReportRejection::from)
         .map_err(warp::reject::custom)
@@ -76,6 +76,8 @@ async fn main() -> Result<()> {
 
     let docker = get_docker().await;
     let docker = warp::any().map(move || docker.clone());
+    let sensors = Arc::new(Sensors::new()?);
+    let sensors = warp::any().map(move || sensors.clone());
 
     if !mdns {
         spawn(setup_mdns(
@@ -86,7 +88,10 @@ async fn main() -> Result<()> {
 
     std::thread::spawn(update_gpu_power);
 
-    let metrics = warp::path!("metrics").and(docker).and_then(serve_metrics);
+    let metrics = warp::path!("metrics")
+        .and(docker)
+        .and(sensors)
+        .and_then(serve_metrics);
 
     warp::serve(metrics).run(([0, 0, 0, 0], host_port)).await;
     Ok(())

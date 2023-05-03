@@ -14,6 +14,7 @@ use std::fmt::Write;
 use std::io;
 use std::num::{ParseFloatError, ParseIntError};
 use std::str::Utf8Error;
+use std::sync::Mutex;
 use sysconf::SysconfError;
 
 #[derive(Debug, thiserror::Error)]
@@ -44,17 +45,33 @@ impl From<SysconfError> for Error {
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-pub fn get_metrics() -> Result<String> {
+pub struct Sensors {
+    pub hostname: String,
+    cpu: Mutex<CpuTimeSource>,
+    temp: Mutex<TemperatureSource>,
+    net: Mutex<NetworkSource>,
+}
+
+impl Sensors {
+    pub fn new() -> Result<Sensors> {
+        Ok(Sensors {
+            hostname: hostname()?,
+            cpu: Mutex::new(CpuTimeSource::new()?),
+            temp: Mutex::new(TemperatureSource::new()?),
+            net: Mutex::new(NetworkSource::new()?),
+        })
+    }
+}
+
+pub fn get_metrics(sensors: &Sensors) -> Result<String> {
+    let hostname = &sensors.hostname;
     let disk_usage = disk_usage()?;
     let disks = disk_stats()?;
-    let mut cpu_source = CpuTimeSource::new()?;
-    let cpu = cpu_source.read()?;
-    let hostname = hostname()?;
+    let cpu = sensors.cpu.lock().unwrap().read()?;
     let memory = memory()?;
-    let mut temp_source = TemperatureSource::new()?;
-    let temperatures = temp_source.read()?;
-    let mut net_source = NetworkSource::new()?;
-    let networks = net_source.read()?;
+    let temperatures = sensors.temp.lock().unwrap().read()?;
+    let mut net = sensors.net.lock().unwrap();
+    let networks = net.read()?;
     let pools = pools();
     let mut result = String::with_capacity(256);
 
