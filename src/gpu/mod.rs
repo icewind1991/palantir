@@ -1,5 +1,5 @@
+use crate::hwmon::FileSource;
 use crate::sensors::Memory;
-use crate::FileSource;
 use std::fmt::Write;
 use std::fs::read_to_string;
 use std::str::FromStr;
