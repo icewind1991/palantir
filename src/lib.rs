@@ -11,6 +11,7 @@ use crate::disk::*;
 use crate::sensors::*;
 use color_eyre::Result;
 use std::fmt::Write;
+use std::io;
 
 pub fn get_metrics() -> Result<String> {
     let disk_usage = disk_usage()?;
@@ -18,29 +19,15 @@ pub fn get_metrics() -> Result<String> {
     let cpu = cpu_time()?;
     let hostname = hostname()?;
     let memory = memory()?;
-    let temperatures = temperatures()?;
+    let mut temp_source = TemperatureSource::new()?;
+    let temperatures = temp_source.read()?;
     let pools = pools();
     let networks = network_stats()?;
     let mut result = String::with_capacity(256);
     writeln!(&mut result, "cpu_time{{host=\"{}\"}} {:.3}", hostname, cpu).ok();
-    writeln!(
-        &mut result,
-        "memory_total{{host=\"{}\"}} {}",
-        hostname, memory.total
-    )
-    .ok();
-    writeln!(
-        &mut result,
-        "memory_available{{host=\"{}\"}} {}",
-        hostname, memory.available
-    )
-    .ok();
-    writeln!(
-        &mut result,
-        "memory_free{{host=\"{}\"}} {}",
-        hostname, memory.free
-    )
-    .ok();
+
+    memory.write(&mut result, &hostname);
+
     for pool in pools {
         writeln!(
             &mut result,
@@ -115,4 +102,15 @@ pub fn get_metrics() -> Result<String> {
         }
     }
     Ok(result)
+}
+
+pub trait SensorData {
+    /// Write sensor data in prometheus compatible format
+    fn write<W: Write>(&self, w: W, hostname: &str);
+}
+
+pub trait SensorSource {
+    type Data: SensorData;
+
+    fn read(&mut self) -> io::Result<Self::Data>;
 }

@@ -1,9 +1,12 @@
 use crate::disk::IoStats;
+use crate::hwmon::{Device, FileSource};
+use crate::{SensorData, SensorSource};
 use color_eyre::{Report, Result};
 use std::array::IntoIter;
-use std::fs::{read, read_dir, read_to_string, File};
+use std::fmt::Write;
+use std::fs::File;
+use std::io;
 use std::io::{BufRead, BufReader};
-use std::os::unix::ffi::OsStrExt;
 
 #[derive(Debug, Clone, Default)]
 pub struct Temperatures {
@@ -20,6 +23,21 @@ impl IntoIterator for Temperatures {
     }
 }
 
+impl SensorData for Temperatures {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        for (label, temp) in self.clone() {
+            if temp != 0.0 {
+                writeln!(
+                    &mut w,
+                    "temperature{{host=\"{}\", sensor=\"{}\"}} {:.1}",
+                    hostname, label, temp
+                )
+                .ok();
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Memory {
     pub total: u64,
@@ -27,72 +45,84 @@ pub struct Memory {
     pub available: u64,
 }
 
-pub fn temperatures() -> Result<Temperatures> {
-    let mut temps = Temperatures::default();
+impl SensorData for Memory {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        writeln!(
+            &mut w,
+            "memory_total{{host=\"{}\"}} {}",
+            hostname, self.total
+        )
+        .ok();
+        writeln!(
+            &mut w,
+            "memory_available{{host=\"{}\"}} {}",
+            hostname, self.available
+        )
+        .ok();
+        writeln!(&mut w, "memory_free{{host=\"{}\"}} {}", hostname, self.free).ok();
+    }
+}
 
-    const DESIRED_HW_MON: &[&[u8]] = &[b"k10temp\n", b"coretemp\n", b"amdgpu\n"];
-    const DESIRED_SENSORS: &[&[u8]] = &[b"Tdie\n", b"edge\n"];
+pub struct TemperatureSource {
+    cpu_sensors: Vec<FileSource>,
+    gpu_sensors: Vec<FileSource>,
+}
 
-    let mut cores_found = 0.0;
-    let mut core_total = 0.0;
+impl TemperatureSource {
+    pub fn new() -> io::Result<TemperatureSource> {
+        let mut cpu_sensors = Vec::new();
+        let mut gpu_sensors = Vec::new();
 
-    for hwmon in read_dir("/sys/class/hwmon")? {
-        let hwmon = hwmon?;
-        let hwmon_name = read(hwmon.path().join("name"))?;
-
-        // rpi cpu_thermal doesn't have labels, special case it
-        if hwmon_name.as_slice() == b"cpu_thermal\n" {
-            let mut path = hwmon.path();
-            path.push("temp1_input");
-            let value = read_to_string(path)?;
-            let parsed: u32 = value.trim().parse()?;
-            temps.cpu = parsed as f32 / 1000.0
-        }
-        if !DESIRED_HW_MON.contains(&hwmon_name.as_slice()) {
-            continue;
-        }
-        for file in read_dir(hwmon.path())? {
-            let file = file?;
-            let path = file.path();
-            let file_name = file.file_name();
-            let bytes = file_name.as_bytes();
-            let label = if bytes.starts_with(b"temp") && bytes.ends_with(b"_label") {
-                read(&path)?
-            } else {
-                continue;
-            };
-            if !DESIRED_SENSORS.contains(&label.as_slice()) && !label.starts_with(b"Core") {
-                continue;
-            }
-            let mut path = path
-                .into_os_string()
-                .into_string()
-                .map_err(|_| Report::msg("Invalid hwmon path"))?;
-            path.truncate(path.len() - "label".len());
-            path.push_str("input");
-            let value = read_to_string(path)?;
-            let parsed: u32 = value.trim().parse()?;
-            match (hwmon_name.as_slice(), label.as_slice()) {
-                (b"k10temp\n", b"Tdie\n") => temps.cpu = parsed as f32 / 1000.0,
-                (b"amdgpu\n", b"edge\n") => temps.gpu = parsed as f32 / 1000.0,
-                (b"coretemp\n", core) if core.starts_with(b"Core") => {
-                    cores_found += 1.0;
-                    core_total += parsed as f32 / 1000.0
+        for device in Device::list().flatten() {
+            if device.name() == "k10temp" || device.name() == "coretemp" {
+                for sensor in device.sensors().flatten() {
+                    if sensor.name() == "Tdie" || sensor.name().starts_with("Core ") {
+                        cpu_sensors.push(sensor.reader()?);
+                    }
                 }
-                _ => {}
+            }
+
+            if device.name() == "amdgpu" {
+                for sensor in device.sensors().flatten() {
+                    if sensor.name() == "edge" {
+                        gpu_sensors.push(sensor.reader()?);
+                    }
+                }
             }
         }
+
+        Ok(TemperatureSource {
+            cpu_sensors,
+            gpu_sensors,
+        })
+    }
+}
+
+fn average_sensors(sensors: &mut [FileSource]) -> f32 {
+    if sensors.is_empty() {
+        return 0.0;
     }
 
-    if temps.cpu == 0.0 && core_total > 0.0 {
-        temps.cpu = core_total / cores_found
+    let mut total = 0.0;
+    let mut count = 0.0;
+    for sensor in sensors.iter_mut() {
+        if let Ok(value) = sensor.read::<f32>() {
+            total += value;
+            count += 1.0
+        }
     }
+    total / count
+}
 
-    if let Some(nvidia_temperature) = crate::gpu::nvidia::temperature() {
-        temps.gpu = nvidia_temperature;
+impl SensorSource for TemperatureSource {
+    type Data = Temperatures;
+
+    fn read(&mut self) -> io::Result<Self::Data> {
+        Ok(Temperatures {
+            cpu: average_sensors(&mut self.cpu_sensors) / 1000.0,
+            gpu: average_sensors(&mut self.gpu_sensors) / 1000.0,
+        })
     }
-
-    Ok(temps)
 }
 
 pub fn memory() -> Result<Memory> {
