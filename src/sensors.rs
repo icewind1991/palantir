@@ -1,4 +1,3 @@
-use crate::disk::IoStats;
 use crate::hwmon::{Device, FileSource};
 use crate::{Error, MultiSensorSource, Result, SensorData, SensorSource};
 use std::array::IntoIter;
@@ -217,6 +216,32 @@ impl SensorSource for CpuTimeSource {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct NetStats {
+    pub interface: String,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
+}
+
+impl SensorData for NetStats {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        if self.bytes_received > 0 || self.bytes_sent > 0 {
+            writeln!(
+                &mut w,
+                "net_sent{{host=\"{}\", network=\"{}\"}} {}",
+                hostname, self.interface, self.bytes_sent
+            )
+            .ok();
+            writeln!(
+                &mut w,
+                "net_received{{host=\"{}\", network=\"{}\"}} {}",
+                hostname, self.interface, self.bytes_received
+            )
+            .ok();
+        }
+    }
+}
+
 pub struct NetworkSource {
     source: File,
     buff: String,
@@ -230,7 +255,7 @@ impl NetworkSource {
         })
     }
 
-    fn parse_line(line: &str) -> Result<IoStats> {
+    fn parse_line(line: &str) -> Result<NetStats> {
         let mut parts = line.trim_start().split_ascii_whitespace();
         if let (
             Some(interface),
@@ -255,7 +280,7 @@ impl NetworkSource {
             parts.next(),
             parts.next(),
         ) {
-            Ok(IoStats {
+            Ok(NetStats {
                 interface: interface.trim_end_matches(':').into(),
                 bytes_sent: bytes_sent.parse()?,
                 bytes_received: bytes_received.parse()?,
@@ -267,7 +292,7 @@ impl NetworkSource {
 }
 
 impl MultiSensorSource for NetworkSource {
-    type Data = IoStats;
+    type Data = NetStats;
     type Iter<'a> = NetworkStatParser<'a>;
 
     fn read(&mut self) -> Result<Self::Iter<'_>> {
@@ -286,7 +311,7 @@ pub struct NetworkStatParser<'a> {
 }
 
 impl<'a> Iterator for NetworkStatParser<'a> {
-    type Item = Result<IoStats>;
+    type Item = Result<NetStats>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let line = loop {

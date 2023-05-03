@@ -1,39 +1,102 @@
-use crate::{Error, Result, SensorData};
+use crate::{Error, MultiSensorSource, Result, SensorData};
 use ahash::{AHashSet, AHasher};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::ffi::CString;
 use std::fmt::Write;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
-use std::io::{BufRead, BufReader};
+use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
 
 pub mod zfs;
 
 #[derive(Debug, Clone, Default)]
-pub struct IoStats {
+pub struct DiskStats {
     pub interface: String,
     pub bytes_sent: u64,
     pub bytes_received: u64,
 }
 
-impl SensorData for IoStats {
+impl SensorData for DiskStats {
     fn write<W: Write>(&self, mut w: W, hostname: &str) {
         if self.bytes_received > 0 || self.bytes_sent > 0 {
             writeln!(
                 &mut w,
-                "net_sent{{host=\"{}\", network=\"{}\"}} {}",
+                "disk_sent{{host=\"{}\", disk=\"{}\"}} {}",
                 hostname, self.interface, self.bytes_sent
             )
             .ok();
             writeln!(
                 &mut w,
-                "net_received{{host=\"{}\", network=\"{}\"}} {}",
+                "disk_received{{host=\"{}\", disk=\"{}\"}} {}",
                 hostname, self.interface, self.bytes_received
             )
             .ok();
         }
+    }
+}
+
+pub struct DiskStatSource {
+    source: File,
+    buff: String,
+    regex: Regex,
+}
+
+impl DiskStatSource {
+    pub fn new() -> Result<DiskStatSource> {
+        Ok(DiskStatSource {
+            source: File::open("/proc/diskstats")?,
+            buff: String::new(),
+            regex: Regex::new(r" ([sv]d[a-z]+|nvme[0-9]n[0-9]|mmcblk[0-9]) ").unwrap(),
+        })
+    }
+}
+
+impl MultiSensorSource for DiskStatSource {
+    type Data = DiskStats;
+    type Iter<'a> = DiskStatParser<'a>;
+
+    fn read(&mut self) -> Result<Self::Iter<'_>> {
+        self.buff.clear();
+        self.source.rewind()?;
+        self.source.read_to_string(&mut self.buff)?;
+
+        Ok(DiskStatParser {
+            lines: self.buff.lines(),
+            regex: &self.regex,
+        })
+    }
+}
+
+pub struct DiskStatParser<'a> {
+    lines: std::str::Lines<'a>,
+    regex: &'a Regex,
+}
+
+impl Iterator for DiskStatParser<'_> {
+    type Item = Result<DiskStats>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let line = loop {
+            let line = self.lines.next()?;
+            if self.regex.is_match(line) {
+                break line;
+            }
+        };
+        let mut parts = line.split_whitespace().skip(2);
+        let name: String = parts.next()?.into();
+        let _read_count = parts.next();
+        let _read_merged_count = parts.next();
+        let read_sectors = parts.next()?.parse::<u64>().ok()?;
+        let mut parts = parts.skip(1);
+        let _write_count = parts.next();
+        let _write_merged_count = parts.next();
+        let write_sectors = parts.next()?.parse::<u64>().ok()?;
+        Some(Ok(DiskStats {
+            interface: name,
+            bytes_sent: write_sectors * 512,
+            bytes_received: read_sectors * 512,
+        }))
     }
 }
 
@@ -44,56 +107,87 @@ pub struct DiskUsage {
     pub free: u64,
 }
 
-pub fn disk_stats() -> Result<impl Iterator<Item = IoStats>> {
-    static DISK_REGEX: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r" ([sv]d[a-z]+|nvme[0-9]n[0-9]|mmcblk[0-9]) ").unwrap());
-
-    let stat = BufReader::new(File::open("/proc/diskstats")?);
-    Ok(stat
-        .lines()
-        .filter_map(Result::ok)
-        .filter(|line| DISK_REGEX.is_match(line))
-        .filter_map(|line: String| {
-            let mut parts = line.split_whitespace().skip(2);
-            let name: String = parts.next()?.into();
-            let _read_count = parts.next();
-            let _read_merged_count = parts.next();
-            let read_sectors = parts.next()?.parse::<u64>().ok()?;
-            let mut parts = parts.skip(1);
-            let _write_count = parts.next();
-            let _write_merged_count = parts.next();
-            let write_sectors = parts.next()?.parse::<u64>().ok()?;
-            Some(IoStats {
-                interface: name,
-                bytes_sent: write_sectors * 512,
-                bytes_received: read_sectors * 512,
-            })
-        }))
+impl SensorData for DiskUsage {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        if self.size > 0 {
+            writeln!(
+                &mut w,
+                "disk_size{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, self.name, self.size
+            )
+            .ok();
+            writeln!(
+                &mut w,
+                "disk_free{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, self.name, self.free
+            )
+            .ok();
+        }
+    }
 }
 
-pub fn disk_usage() -> Result<impl Iterator<Item = DiskUsage>> {
-    let stat = BufReader::new(File::open("/proc/mounts")?);
-    let mut found_disks = AHashSet::with_capacity(8);
-    Ok(stat
-        .lines()
-        .filter_map(Result::ok)
-        .filter(|line| line.starts_with('/'))
-        .filter(|line| !line.contains("/dev/loop"))
-        .filter(|line| !line.contains("fuse"))
-        .filter_map(move |line: String| {
-            let mut parts = line.split_ascii_whitespace();
-            let disk = parts.next()?;
-            if !found_disks.insert(hash_str(disk)) {
-                return None;
+pub struct DiskUsageSource {
+    source: File,
+    buff: String,
+}
+
+impl DiskUsageSource {
+    pub fn new() -> Result<DiskUsageSource> {
+        Ok(DiskUsageSource {
+            source: File::open("/proc/mounts")?,
+            buff: String::new(),
+        })
+    }
+}
+
+impl MultiSensorSource for DiskUsageSource {
+    type Data = DiskUsage;
+    type Iter<'a> = DiskUsageParser<'a>;
+
+    fn read(&mut self) -> Result<Self::Iter<'_>> {
+        self.buff.clear();
+        self.source.rewind()?;
+        self.source.read_to_string(&mut self.buff)?;
+
+        Ok(DiskUsageParser {
+            lines: self.buff.lines(),
+            found_disks: AHashSet::with_capacity(16),
+        })
+    }
+}
+
+pub struct DiskUsageParser<'a> {
+    lines: std::str::Lines<'a>,
+    found_disks: AHashSet<u64>,
+}
+
+impl Iterator for DiskUsageParser<'_> {
+    type Item = Result<DiskUsage>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let line = loop {
+            let line = self.lines.next()?;
+            if line.starts_with('/') && !line.contains("/dev/loop") && !line.contains("fuse") {
+                break line;
             }
-            let mount_point = parts.next()?;
-            let stat = statvfs(&mount_point).ok()?;
-            Some(DiskUsage {
-                name: mount_point.to_string(),
-                size: stat.f_blocks * stat.f_frsize as u64,
-                free: stat.f_bavail * stat.f_frsize as u64,
-            })
+        };
+
+        let mut parts = line.split_ascii_whitespace();
+        let disk = parts.next()?;
+        if !self.found_disks.insert(hash_str(disk)) {
+            return None;
+        }
+        let mount_point = parts.next()?;
+        let stat = match statvfs(&mount_point) {
+            Ok(stat) => stat,
+            Err(e) => return Some(Err(e)),
+        };
+        Some(Ok(DiskUsage {
+            name: mount_point.to_string(),
+            size: stat.f_blocks * stat.f_frsize as u64,
+            free: stat.f_bavail * stat.f_frsize as u64,
         }))
+    }
 }
 
 fn statvfs(path: &str) -> Result<libc::statvfs> {

@@ -5,7 +5,6 @@ pub mod hwmon;
 pub mod power;
 pub mod sensors;
 
-use crate::disk::disk_usage;
 use crate::disk::zfs::pools;
 use crate::disk::*;
 use crate::sensors::*;
@@ -51,6 +50,8 @@ pub struct Sensors {
     temp: Mutex<TemperatureSource>,
     net: Mutex<NetworkSource>,
     mem: Mutex<MemorySource>,
+    disk_stats: Mutex<DiskStatSource>,
+    disk_usage: Mutex<DiskUsageSource>,
 }
 
 impl Sensors {
@@ -61,14 +62,18 @@ impl Sensors {
             temp: Mutex::new(TemperatureSource::new()?),
             net: Mutex::new(NetworkSource::new()?),
             mem: Mutex::new(MemorySource::new()?),
+            disk_stats: Mutex::new(DiskStatSource::new()?),
+            disk_usage: Mutex::new(DiskUsageSource::new()?),
         })
     }
 }
 
 pub fn get_metrics(sensors: &Sensors) -> Result<String> {
     let hostname = &sensors.hostname;
-    let disk_usage = disk_usage()?;
-    let disks = disk_stats()?;
+    let mut disk_source = sensors.disk_stats.lock().unwrap();
+    let mut disk_usage_source = sensors.disk_usage.lock().unwrap();
+    let disks = disk_source.read()?;
+    let disk_usage = disk_usage_source.read()?;
     let cpu = sensors.cpu.lock().unwrap().read()?;
     let memory = sensors.mem.lock().unwrap().read()?;
     let temperatures = sensors.temp.lock().unwrap().read()?;
@@ -100,36 +105,14 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
         }
     }
     for disk in disks {
-        if disk.bytes_received > 0 && disk.bytes_sent > 0 {
-            writeln!(
-                &mut result,
-                "disk_sent{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, disk.interface, disk.bytes_sent
-            )
-            .ok();
-            writeln!(
-                &mut result,
-                "disk_received{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, disk.interface, disk.bytes_received
-            )
-            .ok();
+        if let Ok(disk) = disk {
+            disk.write(&mut result, hostname);
         }
     }
 
     for disk in disk_usage {
-        if disk.size > 0 {
-            writeln!(
-                &mut result,
-                "disk_size{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, disk.name, disk.size
-            )
-            .ok();
-            writeln!(
-                &mut result,
-                "disk_free{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, disk.name, disk.free
-            )
-            .ok();
+        if let Ok(disk) = disk {
+            disk.write(&mut result, hostname);
         }
     }
     for (label, temp) in temperatures {
