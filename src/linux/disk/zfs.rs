@@ -1,5 +1,5 @@
-use crate::disk::DiskUsage;
-use color_eyre::Result;
+use crate::linux::disk::DiskUsage;
+use crate::Result;
 use std::fmt::Write;
 use std::fs::read_to_string;
 use std::process::Command;

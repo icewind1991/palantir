@@ -1,5 +1,5 @@
-use crate::gpu::gpu_power;
-use color_eyre::{Report, Result};
+use crate::linux::gpu::gpu_power;
+use crate::{Error, Result};
 use std::fmt::Write;
 use std::fs::{read_dir, read_to_string};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -63,7 +63,7 @@ pub fn power_usage() -> Result<Option<PowerUsage>> {
         if package
             .file_name()
             .to_str()
-            .ok_or_else(|| Report::msg("Invalid name"))?
+            .ok_or_else(|| Error::Other("Invalid name".into()))?
             .starts_with("intel-rapl")
         {
             let mut package_path = package.path();
@@ -86,7 +86,7 @@ pub fn power_usage() -> Result<Option<PowerUsage>> {
     }
 
     usage.gpu_uj = gpu_power();
-    if let Some(nvidia_power) = crate::gpu::nvidia::power() {
+    if let Some(nvidia_power) = crate::linux::gpu::nvidia::power() {
         usage.gpu_uj = nvidia_power;
     }
 

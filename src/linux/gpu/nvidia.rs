@@ -1,5 +1,4 @@
-use crate::gpu::GpuUsage;
-use crate::sensors::Memory;
+use crate::data::{GpuMemory, GpuUsage};
 use nvml_wrapper::enum_wrappers::device::TemperatureSensor;
 use nvml_wrapper::{Device, Nvml};
 use once_cell::sync::Lazy;
@@ -22,12 +21,11 @@ pub fn power() -> Option<u64> {
         .map(|mj| mj * 1_000)
 }
 
-pub fn memory() -> Option<Memory> {
+pub fn memory() -> Option<GpuMemory> {
     let mem = device()?.memory_info().ok()?;
-    Some(Memory {
+    Some(GpuMemory {
         total: mem.total,
         free: mem.free,
-        available: mem.free,
     })
 }
 

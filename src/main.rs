@@ -3,10 +3,7 @@ use color_eyre::{Report, Result};
 use futures_util::pin_mut;
 use futures_util::StreamExt;
 use libmdns::Responder;
-use palantir::disk::zfs::arcstats;
 use palantir::docker::{get_docker, stat, Container};
-use palantir::gpu::{gpu_metrics, update_gpu_power};
-use palantir::power::power_usage;
 use palantir::{get_metrics, Sensors};
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,13 +36,6 @@ async fn serve_inner(docker: Option<Docker>, sensors: &Sensors) -> Result<String
             container.write(&mut metrics, &sensors.hostname);
         }
     }
-    if let Some(power) = power_usage()? {
-        power.write(&mut metrics, &sensors.hostname);
-    }
-    if let Some(arc) = arcstats()? {
-        arc.write(&mut metrics, &sensors.hostname);
-    }
-    gpu_metrics(&mut metrics, &sensors.hostname);
 
     Ok(metrics)
 }
@@ -85,8 +75,6 @@ async fn main() -> Result<()> {
             host_port,
         ));
     }
-
-    std::thread::spawn(update_gpu_power);
 
     let metrics = warp::path!("metrics")
         .and(docker)

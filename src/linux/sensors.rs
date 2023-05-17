@@ -1,66 +1,10 @@
-use crate::hwmon::{Device, FileSource};
-use crate::{Error, MultiSensorSource, Result, SensorData, SensorSource};
-use std::array::IntoIter;
-use std::fmt::Write;
+use crate::data::{CpuTime, Memory, NetStats, Temperatures};
+use crate::linux::hwmon::{Device, FileSource};
+use crate::{Error, MultiSensorSource, Result, SensorSource};
 use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek};
 use sysconf::{sysconf, SysconfVariable};
-
-#[derive(Debug, Clone, Default)]
-pub struct Temperatures {
-    cpu: f32,
-    gpu: f32,
-}
-
-impl IntoIterator for Temperatures {
-    type Item = (&'static str, f32);
-    type IntoIter = IntoIter<Self::Item, 2>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        [("cpu", self.cpu), ("gpu", self.gpu)].into_iter()
-    }
-}
-
-impl SensorData for Temperatures {
-    fn write<W: Write>(&self, mut w: W, hostname: &str) {
-        for (label, temp) in self.clone() {
-            if temp != 0.0 {
-                writeln!(
-                    &mut w,
-                    "temperature{{host=\"{}\", sensor=\"{}\"}} {:.1}",
-                    hostname, label, temp
-                )
-                .ok();
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct Memory {
-    pub total: u64,
-    pub free: u64,
-    pub available: u64,
-}
-
-impl SensorData for Memory {
-    fn write<W: Write>(&self, mut w: W, hostname: &str) {
-        writeln!(
-            &mut w,
-            "memory_total{{host=\"{}\"}} {}",
-            hostname, self.total
-        )
-        .ok();
-        writeln!(
-            &mut w,
-            "memory_available{{host=\"{}\"}} {}",
-            hostname, self.available
-        )
-        .ok();
-        writeln!(&mut w, "memory_free{{host=\"{}\"}} {}", hostname, self.free).ok();
-    }
-}
 
 pub struct TemperatureSource {
     cpu_sensors: Vec<FileSource>,
@@ -117,10 +61,16 @@ impl SensorSource for TemperatureSource {
     type Data = Temperatures;
 
     fn read(&mut self) -> Result<Self::Data> {
-        Ok(Temperatures {
+        let mut result = Temperatures {
             cpu: average_sensors(&mut self.cpu_sensors) / 1000.0,
             gpu: average_sensors(&mut self.gpu_sensors) / 1000.0,
-        })
+        };
+
+        if let Some(gpu) = super::gpu::nvidia::temperature() {
+            result.gpu = gpu;
+        }
+
+        Ok(result)
     }
 }
 
@@ -165,14 +115,6 @@ impl SensorSource for MemorySource {
     }
 }
 
-pub struct CpuTime(f32);
-
-impl SensorData for CpuTime {
-    fn write<W: Write>(&self, mut w: W, hostname: &str) {
-        writeln!(w, "cpu_time{{host=\"{}\"}} {:.3}", hostname, self.0).ok();
-    }
-}
-
 pub struct CpuTimeSource {
     source: BufReader<File>,
     buff: Vec<u8>,
@@ -212,32 +154,6 @@ impl SensorSource for CpuTimeSource {
             ))
         } else {
             Err(io::Error::from(ErrorKind::InvalidData).into())
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct NetStats {
-    pub interface: String,
-    pub bytes_sent: u64,
-    pub bytes_received: u64,
-}
-
-impl SensorData for NetStats {
-    fn write<W: Write>(&self, mut w: W, hostname: &str) {
-        if self.bytes_received > 0 || self.bytes_sent > 0 {
-            writeln!(
-                &mut w,
-                "net_sent{{host=\"{}\", network=\"{}\"}} {}",
-                hostname, self.interface, self.bytes_sent
-            )
-            .ok();
-            writeln!(
-                &mut w,
-                "net_received{{host=\"{}\", network=\"{}\"}} {}",
-                hostname, self.interface, self.bytes_received
-            )
-            .ok();
         }
     }
 }
@@ -325,10 +241,4 @@ impl<'a> Iterator for NetworkStatParser<'a> {
 
         Some(NetworkSource::parse_line(line))
     }
-}
-
-pub fn hostname() -> Result<String> {
-    hostname::get()?
-        .into_string()
-        .map_err(|_| Error::InvalidHostName)
 }
