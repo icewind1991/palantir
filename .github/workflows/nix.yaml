@@ -1,16 +1,16 @@
-name: Release
-
+name: "Build"
 on:
-  release:
-    types: [created]
-
+  pull_request:
+  push:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         target:
+          - x86_64-unknown-linux-gnu
           - x86_64-pc-windows-gnu
           - x86_64-unknown-linux-musl
           - i686-unknown-linux-musl
@@ -26,10 +26,7 @@ jobs:
           name: palantir
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - run: nix build .#${{ matrix.target }}
-      - name: Upload binary to release
-        uses: svenstaro/upload-release-action@v2
+      - uses: actions/upload-artifact@v3
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: release/bin/*
-          asset_name: palantir-${{ matrix.target }}
-          tag: ${{ github.ref }}
+          name: palantir-${{ matrix.target }}
+          path: result/bin/*

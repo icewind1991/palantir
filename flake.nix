@@ -27,9 +27,34 @@
         inherit system overlays;
       };
 
-      toolchain = (pkgs.rust-bin.stable.latest.default.override {
-        targets = [ "x86_64-pc-windows-gnu" ];
-      });
+      targets = [
+        "x86_64-unknown-linux-gnu"
+        "x86_64-pc-windows-gnu"
+        "x86_64-unknown-linux-musl"
+        "i686-unknown-linux-musl"
+        "armv7-unknown-linux-musleabihf"
+        "aarch64-unknown-linux-musl"
+       ];
+
+      toolchain = (pkgs.rust-bin.stable.latest.default.override { inherit targets; });
+
+      crossArgs = {
+        "armv7-unknown-linux-musleabihf" = {
+          nativeBuildInputs = [ pkgs.pkgsCross.armv7l-hf-multiplatform.stdenv.cc ];
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_RUSTFLAGS = "-C target-feature=+crt-static";
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER = "${pkgs.pkgsCross.armv7l-hf-multiplatform.stdenv.cc.targetPrefix}cc";
+        };
+        "aarch64-unknown-linux-musl" = {
+          nativeBuildInputs = [ pkgs.pkgsCross.aarch64-multiplatform-musl.stdenv.cc ];
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS = "-C target-feature=+crt-static";
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER = "${pkgs.pkgsCross.aarch64-multiplatform-musl.stdenv.cc.targetPrefix}cc";
+        };
+        "i686-unknown-linux-musl" = {
+          nativeBuildInputs = [ pkgs.pkgsCross.musl32.stdenv.cc ];
+          CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_RUSTFLAGS = "-C target-feature=+crt-static";
+          CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_LINKER = "${pkgs.pkgsCross.musl32.stdenv.cc.targetPrefix}cc";
+        };
+      };
 
       mingw_w64_cc = pkgs.pkgsCross.mingwW64.stdenv.cc;
       windows = pkgs.pkgsCross.mingwW64.windows;
@@ -38,19 +63,8 @@
         cargo = toolchain;
         rustc = toolchain;
       };
-    in rec {
-      # `nix build`
-      packages.palantir = naersk'.buildPackage {
-        pname = "palantir";
-        src = ./.;
 
-        postInstall = ''
-          mkdir -p $out/lib/udev/rules.d/
-          echo 'SUBSYSTEM=="powercap", ACTION=="add", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
-                 echo 'SUBSYSTEM=="powercap", ACTION=="change", ENV{TRIGGER}!="none", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
-        '';
-      };
-      packages.palantir-win = naersk'.buildPackage {
+      buildWindows = target: naersk'.buildPackage {
         pname = "palantir";
         src = ./.;
 
@@ -59,11 +73,30 @@
           mingw_w64_cc
         ];
         nativeBuildInputs = [ mingw_w64_cc ];
+        # only add pthreads when building the final package, not when building the dependencies
+        # otherwise it interferes with building build scripts
         overrideMain = args: args // { buildInputs = [ windows.pthreads ]; };
 
-        CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
+        CARGO_BUILD_TARGET = target;
       };
-      defaultPackage = packages.palantir;
+
+      buildLinux = target: naersk'.buildPackage ({
+        pname = "palantir";
+        src = ./.;
+
+        postInstall = ''
+          mkdir -p $out/lib/udev/rules.d/
+          echo 'SUBSYSTEM=="powercap", ACTION=="add", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
+                 echo 'SUBSYSTEM=="powercap", ACTION=="change", ENV{TRIGGER}!="none", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
+        '';
+
+        CARGO_BUILD_TARGET = target;
+      } // (if (pkgs.config != target) then (crossArgs.${target} or {}) else {}));
+      buildAny = target: if (nixpkgs.lib.strings.hasInfix "windows" target) then (buildWindows target) else (buildLinux target);
+    in rec {
+      # `nix build`
+      packages = nixpkgs.lib.attrsets.genAttrs targets buildAny;
+      defaultPackage = packages.${pkgs.config};
 
       # `nix run`
       apps.palantir = utils.lib.mkApp {
