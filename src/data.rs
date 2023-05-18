@@ -182,3 +182,41 @@ impl SensorData for DiskUsage {
         }
     }
 }
+
+#[derive(Debug, Default)]
+pub struct PowerUsage {
+    pub cpu_uj: u64,
+    pub cpu_packages_uj: Vec<u64>,
+    pub gpu_uj: u64,
+}
+
+impl PowerUsage {
+    pub fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        writeln!(
+            &mut w,
+            r#"total_power{{host="{}", device="cpu"}} {:.3}"#,
+            hostname,
+            self.cpu_uj as f64 / 1_000_000.0
+        )
+        .ok();
+        for (i, package) in self.cpu_packages_uj.iter().enumerate() {
+            writeln!(
+                &mut w,
+                r#"package_power{{host="{}", package="{}", device="cpu"}} {:.3}"#,
+                hostname,
+                i,
+                *package as f64 / 1_000_000.0
+            )
+            .ok();
+        }
+        if self.gpu_uj > 0 {
+            writeln!(
+                &mut w,
+                r#"total_power{{host="{}", device="gpu"}} {:.3}"#,
+                hostname,
+                self.gpu_uj as f64 / 1_000_000.0
+            )
+            .ok();
+        }
+    }
+}

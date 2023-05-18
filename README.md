@@ -62,3 +62,7 @@ To enable monitoring of docker containers, add the `palantir` user to the `docke
 ```bash
 sudo usermod -a -G docker palantir
 ```
+
+## Windows support
+
+Palantir has limited windows support out of the box, additional sensors can be enabled by running [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor).

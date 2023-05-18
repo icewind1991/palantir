@@ -1,3 +1,4 @@
+use crate::data::PowerUsage;
 use crate::linux::gpu::gpu_power;
 use crate::{Error, Result};
 use std::fmt::Write;
@@ -6,44 +7,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::warn;
 
 static CAN_READ: AtomicBool = AtomicBool::new(true);
-
-#[derive(Debug, Default)]
-pub struct PowerUsage {
-    cpu_uj: u64,
-    cpu_packages_uj: Vec<u64>,
-    gpu_uj: u64,
-}
-
-impl PowerUsage {
-    pub fn write<W: Write>(&self, mut w: W, hostname: &str) {
-        writeln!(
-            &mut w,
-            r#"total_power{{host="{}", device="cpu"}} {:.3}"#,
-            hostname,
-            self.cpu_uj as f64 / 1_000_000.0
-        )
-        .ok();
-        for (i, package) in self.cpu_packages_uj.iter().enumerate() {
-            writeln!(
-                &mut w,
-                r#"package_power{{host="{}", package="{}", device="cpu"}} {:.3}"#,
-                hostname,
-                i,
-                *package as f64 / 1_000_000.0
-            )
-            .ok();
-        }
-        if self.gpu_uj > 0 {
-            writeln!(
-                &mut w,
-                r#"total_power{{host="{}", device="gpu"}} {:.3}"#,
-                hostname,
-                self.gpu_uj as f64 / 1_000_000.0
-            )
-            .ok();
-        }
-    }
-}
 
 pub fn power_usage() -> Result<Option<PowerUsage>> {
     if !CAN_READ.load(Ordering::Relaxed) {

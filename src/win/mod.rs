@@ -12,6 +12,7 @@ use once_cell::sync::Lazy;
 use os_thread_local::ThreadLocal;
 use std::borrow::Cow;
 use std::sync::Mutex;
+use std::thread::spawn;
 use sysinfo::{ComponentExt, DiskExt, NetworkExt, System, SystemExt};
 
 pub struct Sensors {
@@ -26,6 +27,7 @@ static WMI: Lazy<ThreadLocal<WmiSensor>> =
 
 impl Sensors {
     pub fn new() -> Result<Sensors> {
+        spawn(wmi::update_power);
         let mut system = System::new_all();
         system.refresh_all();
         println!("{:?}", system);
@@ -96,6 +98,9 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
     if let Some(disk_usage) = WMI.with(|wmi| wmi.disk_usage())? {
         disk_usage.write(&mut result, &hostname);
     }
+    let hwmon_data = WMI.with(|wmi| wmi.hwmon())?;
+    hwmon_data.temperature.write(&mut result, &hostname);
+    hwmon_data.power.write(&mut result, &hostname);
 
     Ok(result)
 }

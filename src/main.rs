@@ -1,4 +1,5 @@
 use bollard::Docker;
+use clap::Parser;
 use color_eyre::{Report, Result};
 use futures_util::pin_mut;
 use futures_util::StreamExt;
@@ -26,6 +27,14 @@ impl From<Report> for ReportRejection {
 
 impl Reject for ReportRejection {}
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Port to listen to
+    #[arg(short, long)]
+    port: Option<u16>,
+}
+
 async fn serve_inner(docker: Option<Docker>, sensors: &Sensors) -> Result<String> {
     let mut metrics = get_metrics(sensors)?;
     if let Some(docker) = docker {
@@ -50,12 +59,16 @@ async fn serve_metrics(docker: Option<Docker>, sensors: Arc<Sensors>) -> Result<
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
+    let args = Args::parse();
 
-    let host_port: u16 = dotenvy::var("PORT")
-        .ok()
-        .map(|port| port.parse())
-        .transpose()?
-        .unwrap_or(80);
+    let host_port = match args.port {
+        Some(port) => port,
+        None => dotenvy::var("PORT")
+            .ok()
+            .map(|port| port.parse())
+            .transpose()?
+            .unwrap_or(80),
+    };
 
     let mdns = dotenvy::var("DISABLE_MDNS").is_ok();
 
