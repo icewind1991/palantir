@@ -1,7 +1,6 @@
 use crate::data::PowerUsage;
 use crate::linux::gpu::gpu_power;
 use crate::{Error, Result};
-use std::fmt::Write;
 use std::fs::{read_dir, read_to_string};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::warn;

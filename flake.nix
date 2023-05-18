@@ -26,21 +26,42 @@
         };
         inherit system overlays;
       };
-      mingw_w64_cc = pkgs-cross-mingw.stdenv.cc;
-      mingw_w64 = pkgs-cross-mingw.windows.mingw_w64;
-      windows = pkgs-cross-mingw.windows;
 
-      naersk-lib = naersk.lib."${system}";
+      toolchain = (pkgs.rust-bin.stable.latest.default.override {
+        targets = [ "x86_64-pc-windows-gnu" ];
+      });
+
+      mingw_w64_cc = pkgs.pkgsCross.mingwW64.stdenv.cc;
+      windows = pkgs.pkgsCross.mingwW64.windows;
+
+      naersk' = pkgs.callPackage naersk {
+        cargo = toolchain;
+        rustc = toolchain;
+      };
     in rec {
       # `nix build`
-      packages.palantir = naersk-lib.buildPackage {
+      packages.palantir = naersk'.buildPackage {
         pname = "palantir";
-        root = ./.;
+        src = ./.;
+
         postInstall = ''
           mkdir -p $out/lib/udev/rules.d/
           echo 'SUBSYSTEM=="powercap", ACTION=="add", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
                  echo 'SUBSYSTEM=="powercap", ACTION=="change", ENV{TRIGGER}!="none", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
         '';
+      };
+      packages.palantir-win = naersk'.buildPackage {
+        pname = "palantir";
+        src = ./.;
+
+        strictDeps = true;
+        depsBuildBuild = with pkgs; [
+          mingw_w64_cc
+        ];
+        nativeBuildInputs = [ mingw_w64_cc ];
+        overrideMain = args: args // { buildInputs = [ windows.pthreads ]; };
+
+        CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
       };
       defaultPackage = packages.palantir;
 
@@ -53,14 +74,12 @@
       # `nix develop`
       devShell = pkgs.mkShell {
         nativeBuildInputs = with pkgs; [
-          (rust-bin.stable.latest.default.override {
-            targets = [ "x86_64-pc-windows-gnu" ];
-          })
+          toolchain
           bacon
           mingw_w64_cc
         ];
         depsBuildBuild = [ pkgs.wine64 ];
-        buildInputs = [ windows.pthreads ];
+#        buildInputs = [ windows.pthreads ];
 
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "${mingw_w64_cc.targetPrefix}cc";
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = "wine64";

@@ -1,9 +1,8 @@
 use crate::data::{DiskStats, DiskUsage};
-use crate::{Error, MultiSensorSource, Result, SensorData};
+use crate::{Error, MultiSensorSource, Result};
 use ahash::{AHashSet, AHasher};
 use regex::Regex;
 use std::ffi::CString;
-use std::fmt::Write;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Seek};

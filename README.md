@@ -4,12 +4,12 @@ System metrics exporter for prometheus
 
 ## Exported metrics
 
-- cpu, memory, io, network and disk usage stats
+- cpu, memory, gpu memory, io, network and disk usage stats
 - zfs pool usage and arc stats
-- cpu and gpu temperature (gpu temps only for amd cards)
-- cpu power usage on modern amd and intel platforms
+- cpu and gpu temperature
+- cpu and gpu power usage on modern amd and intel platforms
 - docker per-container cpu, memory and network stats
-- 
+
 ## Usage
 
 - Download the binary for your architecture from the [releases](https://github.com/icewind1991/palantir/releases/) and place it at `/usr/local/bin/palantir`
