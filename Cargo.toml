@@ -24,7 +24,14 @@ nvml-wrapper = "0.8.0"
 if-addrs = "0.7.0"
 sysconf = "0.3.4"
 thiserror = "1.0.40"
-sysinfo = { version = "0.29.0", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+serde = { version = "1.0.163", features = ["derive"] }
+sysinfo = { version = "0.29.0" }
+winapi = { version = "0.3.9", features = ["sysinfoapi", "processthreadsapi", "powerbase", "minwindef", "winnt", "winbase", "winerror", "impl-default"] }
+wmi = { version = "0.13.0" }
+winreg = { version = "0.50.0", features = ["serialization-serde"] }
+os-thread-local = "0.1.3"
 
 [dev-dependencies]
 iai = "0.1.1"

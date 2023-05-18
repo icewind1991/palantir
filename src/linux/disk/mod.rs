@@ -1,3 +1,4 @@
+use crate::data::{DiskStats, DiskUsage};
 use crate::{Error, MultiSensorSource, Result, SensorData};
 use ahash::{AHashSet, AHasher};
 use regex::Regex;
@@ -9,32 +10,6 @@ use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
 
 pub mod zfs;
-
-#[derive(Debug, Clone, Default)]
-pub struct DiskStats {
-    pub interface: String,
-    pub bytes_sent: u64,
-    pub bytes_received: u64,
-}
-
-impl SensorData for DiskStats {
-    fn write<W: Write>(&self, mut w: W, hostname: &str) {
-        if self.bytes_received > 0 || self.bytes_sent > 0 {
-            writeln!(
-                &mut w,
-                "disk_sent{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, self.interface, self.bytes_sent
-            )
-            .ok();
-            writeln!(
-                &mut w,
-                "disk_received{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, self.interface, self.bytes_received
-            )
-            .ok();
-        }
-    }
-}
 
 pub struct DiskStatSource {
     source: File,
@@ -97,32 +72,6 @@ impl Iterator for DiskStatParser<'_> {
             bytes_sent: write_sectors * 512,
             bytes_received: read_sectors * 512,
         }))
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct DiskUsage {
-    pub name: String,
-    pub size: u64,
-    pub free: u64,
-}
-
-impl SensorData for DiskUsage {
-    fn write<W: Write>(&self, mut w: W, hostname: &str) {
-        if self.size > 0 {
-            writeln!(
-                &mut w,
-                "disk_size{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, self.name, self.size
-            )
-            .ok();
-            writeln!(
-                &mut w,
-                "disk_free{{host=\"{}\", disk=\"{}\"}} {}",
-                hostname, self.name, self.free
-            )
-            .ok();
-        }
     }
 }
 

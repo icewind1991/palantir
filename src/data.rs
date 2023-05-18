@@ -1,5 +1,6 @@
 use crate::SensorData;
 use std::array::IntoIter;
+use std::borrow::Cow;
 use std::fmt::Write;
 
 #[derive(Debug, Clone, Default)]
@@ -115,7 +116,7 @@ impl SensorData for NetStats {
 }
 
 pub struct GpuUsage {
-    pub system: &'static str,
+    pub system: Cow<'static, str>,
     pub usage: u32,
 }
 
@@ -127,5 +128,57 @@ impl GpuUsage {
             hostname, self.system, self.usage,
         )
         .ok();
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DiskStats {
+    pub interface: String,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
+}
+
+impl SensorData for DiskStats {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        if self.bytes_received > 0 || self.bytes_sent > 0 {
+            writeln!(
+                &mut w,
+                "disk_sent{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, self.interface, self.bytes_sent
+            )
+            .ok();
+            writeln!(
+                &mut w,
+                "disk_received{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, self.interface, self.bytes_received
+            )
+            .ok();
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DiskUsage {
+    pub name: String,
+    pub size: u64,
+    pub free: u64,
+}
+
+impl SensorData for DiskUsage {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        if self.size > 0 {
+            writeln!(
+                &mut w,
+                "disk_size{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, self.name, self.size
+            )
+            .ok();
+            writeln!(
+                &mut w,
+                "disk_free{{host=\"{}\", disk=\"{}\"}} {}",
+                hostname, self.name, self.free
+            )
+            .ok();
+        }
     }
 }

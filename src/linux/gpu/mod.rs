@@ -1,5 +1,6 @@
 use crate::data::{GpuMemory, GpuUsage};
 use crate::linux::hwmon::FileSource;
+use std::borrow::Cow;
 use std::fs::read_to_string;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -41,7 +42,7 @@ pub fn utilization() -> impl Iterator<Item = GpuUsage> {
     ];
     let drm = sources.into_iter().flat_map(|(system, usage)| {
         Some(GpuUsage {
-            system,
+            system: Cow::Borrowed(system),
             usage: usage?,
         })
     });

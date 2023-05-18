@@ -7,20 +7,22 @@ use std::string::FromUtf8Error;
 pub mod data;
 pub mod docker;
 
-#[cfg(not(feature = "sysinfo"))]
+#[cfg(not(target_os = "windows"))]
 mod linux;
-#[cfg(feature = "sysinfo")]
-mod sys;
+#[cfg(target_os = "windows")]
+pub mod win;
 
-#[cfg(not(feature = "sysinfo"))]
+#[cfg(not(target_os = "windows"))]
 pub use linux::{get_metrics, Sensors};
-#[cfg(feature = "sysinfo")]
-pub use sys::{get_metrics, Sensors};
+#[cfg(target_os = "windows")]
+pub use win::{get_metrics, Sensors};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("{1}: {0}")]
+    Os(std::io::Error, &'static str),
     #[error("{0}")]
     Other(String),
     #[error("Non UTF8 hostname")]
@@ -35,6 +37,19 @@ pub enum Error {
     InvalidCStringData(#[from] NulError),
     #[error("Failed to query vfs stats")]
     StatVfs,
+    #[cfg(target_os = "windows")]
+    #[error(transparent)]
+    Wmi(#[from] wmi::WMIError),
+    #[cfg(target_os = "windows")]
+    #[error("{0}")]
+    Reg(String),
+}
+
+impl Error {
+    pub fn last_os_error(context: &'static str) -> Error {
+        let err = std::io::Error::last_os_error();
+        Error::Os(err, context)
+    }
 }
 
 impl From<FromUtf8Error> for Error {

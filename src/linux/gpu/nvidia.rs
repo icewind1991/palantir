@@ -2,6 +2,7 @@ use crate::data::{GpuMemory, GpuUsage};
 use nvml_wrapper::enum_wrappers::device::TemperatureSensor;
 use nvml_wrapper::{Device, Nvml};
 use once_cell::sync::Lazy;
+use std::borrow::Cow;
 
 static NVIDIA: Lazy<Option<Nvml>> = Lazy::new(|| Nvml::init().ok());
 
@@ -49,7 +50,7 @@ pub fn utilization() -> impl Iterator<Item = GpuUsage> {
     };
     sources.into_iter().flat_map(|(system, usage)| {
         Some(GpuUsage {
-            system,
+            system: Cow::Borrowed(system),
             usage: usage?,
         })
     })
