@@ -10,12 +10,22 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target:
-          - x86_64-pc-windows-gnu
-          - x86_64-unknown-linux-musl
-          - i686-unknown-linux-musl
-          - armv7-unknown-linux-musleabihf
-          - aarch64-unknown-linux-musl
+        include:
+          - target: x86_64-pc-windows-gnu
+            artifact_name: palantir.exe
+            asset_name: palantir-x86_64-windows.exe
+          - target: x86_64-unknown-linux-musl
+            artifact_name: palantir
+            asset_name: palantir-x86_64-linux
+          - target: i686-unknown-linux-musl
+            artifact_name: palantir
+            asset_name: palantir-i686-linux
+          - target: armv7-unknown-linux-musleabihf
+            artifact_name: palantir
+            asset_name: palantir-armv7-linux
+          - target: aarch64-unknown-linux-musl
+            artifact_name: palantir
+            asset_name: palantir-aarch64-linux
     steps:
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v20
@@ -30,6 +40,6 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: release/bin/*
-          asset_name: palantir-${{ matrix.target }}
+          file: result/bin/${{ matrix.artifact_name }}
+          asset_name: ${{ matrix.asset_name }}
           tag: ${{ github.ref }}
