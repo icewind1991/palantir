@@ -93,12 +93,12 @@
         '';
 
         CARGO_BUILD_TARGET = target;
-      } // (if (pkgs.config != target) then (crossArgs.${target} or {}) else {}));
+      } // (if (pkgs.hostPlatform.config != target) then (crossArgs.${target} or {}) else {}));
       buildAny = target: if (nixpkgs.lib.strings.hasInfix "windows" target) then (buildWindows target) else (buildLinux target);
     in rec {
       # `nix build`
       packages = nixpkgs.lib.attrsets.genAttrs targets buildAny;
-      defaultPackage = packages.${pkgs.config};
+      defaultPackage = packages.${pkgs.hostPlatform.config};
 
       # `nix run`
       apps.palantir = utils.lib.mkApp {
