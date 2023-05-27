@@ -66,6 +66,12 @@
         rustc = toolchain;
       };
 
+      addUdev = ''
+        mkdir -p $out/lib/udev/rules.d/
+        echo 'SUBSYSTEM=="powercap", ACTION=="add", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
+               echo 'SUBSYSTEM=="powercap", ACTION=="change", ENV{TRIGGER}!="none", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
+      '';
+
       buildWindows = target: naersk'.buildPackage {
         pname = "palantir";
         src = ./.;
@@ -86,11 +92,7 @@
         pname = "palantir";
         src = ./.;
 
-        postInstall = ''
-          mkdir -p $out/lib/udev/rules.d/
-          echo 'SUBSYSTEM=="powercap", ACTION=="add", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
-                 echo 'SUBSYSTEM=="powercap", ACTION=="change", ENV{TRIGGER}!="none", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
-        '';
+        postInstall = addUdev;
 
         CARGO_BUILD_TARGET = target;
       } // (if (pkgs.hostPlatform.config != target) then (crossArgs.${target} or {}) else {}));
@@ -98,7 +100,11 @@
     in rec {
       # `nix build`
       packages = nixpkgs.lib.attrsets.genAttrs targets buildAny;
-      defaultPackage = packages.${pkgs.hostPlatform.config};
+      defaultPackage = naersk'.buildPackage {
+         pname = "palantir";
+         src = ./.;
+         postInstall = addUdev;
+       };
 
       # `nix run`
       apps.palantir = utils.lib.mkApp {
