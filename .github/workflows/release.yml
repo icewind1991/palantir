@@ -31,7 +31,7 @@ jobs:
       - uses: cachix/install-nix-action@v20
       - uses: icewind1991/attic-action@v1
         with:
-          name: palantir
+          name: ci
           instance: https://cache.icewind.me
           authToken: '${{ secrets.ATTIC_TOKEN }}'
       - run: nix build .#${{ matrix.target }}
