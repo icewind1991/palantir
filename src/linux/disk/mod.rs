@@ -126,10 +126,12 @@ impl Iterator for DiskUsageParser<'_> {
             return None;
         }
         let mount_point = parts.next()?;
-        let stat = match statvfs(&mount_point) {
+        let stat = match statvfs(mount_point) {
             Ok(stat) => stat,
             Err(e) => return Some(Err(e)),
         };
+        // cast is needed on 32bit platforms
+        #[allow(clippy::unnecessary_cast)]
         Some(Ok(DiskUsage {
             name: mount_point.to_string(),
             size: stat.f_blocks * stat.f_frsize as u64,

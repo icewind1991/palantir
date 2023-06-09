@@ -120,7 +120,7 @@ async fn setup_mdns(hostname: String, port: u16) {
         "_prometheus-http._tcp".into(),
         hostname,
         port,
-        &[&"/metrics"],
+        &["/metrics"],
     );
 
     loop {

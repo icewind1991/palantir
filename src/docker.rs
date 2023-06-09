@@ -105,5 +105,5 @@ pub async fn stat(docker: Docker) -> Result<impl Stream<Item = Container>> {
             }
         })
         .collect::<FuturesUnordered<_>>()
-        .filter_map(|opt| ready(opt)))
+        .filter_map(ready))
 }

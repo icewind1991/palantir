@@ -22,7 +22,7 @@ pub fn pools() -> impl Iterator<Item = DiskUsage> {
 
 fn zpool_command() -> Result<String> {
     let mut z = Command::new("zpool");
-    z.args(&["list", "-p", "-H", "-o", "name,size,free"]);
+    z.args(["list", "-p", "-H", "-o", "name,size,free"]);
     let out = z.output()?;
     if out.status.success() {
         Ok(String::from_utf8(out.stdout)?)

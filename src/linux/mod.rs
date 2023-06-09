@@ -61,8 +61,8 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
     let pools = pools();
     let mut result = String::with_capacity(256);
 
-    cpu.write(&mut result, &hostname);
-    memory.write(&mut result, &hostname);
+    cpu.write(&mut result, hostname);
+    memory.write(&mut result, hostname);
 
     for pool in pools {
         writeln!(
@@ -78,21 +78,15 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
         )
         .ok();
     }
-    for network in networks {
-        if let Ok(network) = network {
-            network.write(&mut result, &hostname);
-        }
+    for network in networks.flatten() {
+        network.write(&mut result, hostname);
     }
-    for disk in disks {
-        if let Ok(disk) = disk {
-            disk.write(&mut result, hostname);
-        }
+    for disk in disks.flatten() {
+        disk.write(&mut result, hostname);
     }
 
-    for disk in disk_usage {
-        if let Ok(disk) = disk {
-            disk.write(&mut result, hostname);
-        }
+    for disk in disk_usage.flatten() {
+        disk.write(&mut result, hostname);
     }
     for (label, temp) in temperatures {
         if temp != 0.0 {

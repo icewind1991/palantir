@@ -2,7 +2,7 @@
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-23.05";
     utils.url = "github:numtide/flake-utils";
-    naersk.url = "github:nix-community/naersk";
+    naersk.url = "github:icewind1991/naersk?rev=6d245a3bbb2ee31ec726bb57b9a8b206302e7110";
     naersk.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
@@ -21,6 +21,7 @@
       pkgs = import nixpkgs {
         inherit system overlays;
       };
+      lib = pkgs.lib;
 
       pkgs-cross-mingw = import nixpkgs {
         crossSystem = {
@@ -72,10 +73,14 @@
                echo 'SUBSYSTEM=="powercap", ACTION=="change", ENV{TRIGGER}!="none", RUN+="${pkgs.coreutils-full}/bin/chgrp -R powermonitoring /sys%p", RUN+="${pkgs.coreutils-full}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
       '';
 
-      buildWindows = target: naersk'.buildPackage {
-        pname = "palantir";
-        src = ./.;
+      src = lib.sources.sourceByRegex (lib.cleanSource ./.) ["Cargo.*" "(src|benches)(/.*)?"];
 
+      nearskOpt = {
+        pname = "palantir";
+        root = src;
+      };
+
+      buildWindows = target: naersk'.buildPackage (nearskOpt // {
         strictDeps = true;
         depsBuildBuild = with pkgs; [
           mingw_w64_cc
@@ -86,12 +91,9 @@
         overrideMain = args: args // { buildInputs = [ windows.pthreads ]; };
 
         CARGO_BUILD_TARGET = target;
-      };
+      });
 
-      buildLinux = target: naersk'.buildPackage ({
-        pname = "palantir";
-        src = ./.;
-
+      buildLinux = target: naersk'.buildPackage (nearskOpt // {
         postInstall = addUdev;
 
         CARGO_BUILD_TARGET = target;
@@ -99,21 +101,28 @@
       buildAny = target: if (nixpkgs.lib.strings.hasInfix "windows" target) then (buildWindows target) else (buildLinux target);
     in rec {
       # `nix build`
-      packages = nixpkgs.lib.attrsets.genAttrs targets buildAny;
-      defaultPackage = naersk'.buildPackage {
-         pname = "palantir";
-         src = ./.;
-         postInstall = addUdev;
-       };
+      packages = nixpkgs.lib.attrsets.genAttrs targets buildAny // rec {
+        palantir = naersk'.buildPackage (nearskOpt // {
+          postInstall = addUdev;
+        });
+        check = naersk'.buildPackage (nearskOpt // {
+          mode = "check";
+        });
+        clippy = naersk'.buildPackage (nearskOpt // {
+          mode = "clippy";
+        });
+        default = palantir;
+      };
 
-      # `nix run`
       apps.palantir = utils.lib.mkApp {
         drv = packages.palantir;
       };
       defaultApp = apps.palantir;
 
+      inherit targets;
+
       # `nix develop`
-      devShell = pkgs.mkShell {
+      devShells.default = pkgs.mkShell {
         nativeBuildInputs = with pkgs; [
           toolchain
           bacon
