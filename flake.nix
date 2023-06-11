@@ -30,16 +30,22 @@
         inherit system overlays;
       };
 
+      hostTarget = pkgs.hostPlatform.config;
       targets = [
-        "x86_64-unknown-linux-gnu"
+        hostTarget
         "x86_64-pc-windows-gnu"
         "x86_64-unknown-linux-musl"
         "i686-unknown-linux-musl"
         "armv7-unknown-linux-musleabihf"
         "aarch64-unknown-linux-musl"
-       ];
+      ];
+
+      releaseTargets = lib.lists.remove hostTarget targets;
 
       toolchain = (pkgs.rust-bin.stable.latest.default.override { inherit targets; });
+      execSufficForTarget = target: if lib.strings.hasInfix "windows" target then ".exe" else "";
+      artifactForTarget = target: "palantir${execSufficForTarget target}";
+      assetNameForTarget = target: "palantir-${builtins.replaceStrings ["-unknown" "-gnu" "-musl" "abihf" "-pc"] ["" "" "" "" ""] target}${execSufficForTarget target}";
 
       crossArgs = {
         "armv7-unknown-linux-musleabihf" = {
@@ -97,7 +103,7 @@
         postInstall = addUdev;
 
         CARGO_BUILD_TARGET = target;
-      } // (if (pkgs.hostPlatform.config != target) then (crossArgs.${target} or {}) else {}));
+      } // (if (hostTarget != target) then (crossArgs.${target} or {}) else {}));
       buildAny = target: if (nixpkgs.lib.strings.hasInfix "windows" target) then (buildWindows target) else (buildLinux target);
     in rec {
       # `nix build`
@@ -120,6 +126,13 @@
       defaultApp = apps.palantir;
 
       inherit targets;
+      releaseMatrix = {
+        include = builtins.map (target: {
+          inherit target;
+          artifact_name = artifactForTarget target;
+          asset_name = assetNameForTarget target;
+        }) releaseTargets;
+      };
 
       # `nix develop`
       devShells.default = pkgs.mkShell {
