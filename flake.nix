@@ -197,7 +197,7 @@
 
             users.groups.powermonitoring = {};
 
-            services.udev.packages = [self.defaultPackage.${pkgs.system}];
+            services.udev.packages = [self.packages.${pkgs.system}.default];
 
             systemd.services."palantir" = {
               wantedBy = ["multi-user.target"];
@@ -210,7 +210,7 @@
               } else {});
 
               serviceConfig = let
-                pkg = self.defaultPackage.${pkgs.system};
+                pkg = self.packages.${pkgs.system}.default;
               in {
                 Restart = "on-failure";
                 ExecStart = "${pkg}/bin/palantir";
