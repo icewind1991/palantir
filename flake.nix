@@ -7,6 +7,9 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.inputs.flake-utils.follows = "utils";
+    cross-naersk.url = "github:icewind1991/cross-naersk";
+    cross-naersk.inputs.nixpkgs.follows = "nixpkgs";
+    cross-naersk.inputs.naersk.follows = "naersk";
   };
 
   outputs = {
@@ -15,6 +18,7 @@
     utils,
     naersk,
     rust-overlay,
+    cross-naersk,
   }:
     utils.lib.eachDefaultSystem (system: let
       overlays = [ (import rust-overlay) ];
@@ -22,13 +26,6 @@
         inherit system overlays;
       };
       lib = pkgs.lib;
-
-      pkgs-cross-mingw = import nixpkgs {
-        crossSystem = {
-          config = "x86_64-w64-mingw32";
-        };
-        inherit system overlays;
-      };
 
       hostTarget = pkgs.hostPlatform.config;
       targets = [
@@ -42,36 +39,11 @@
 
       releaseTargets = lib.lists.remove hostTarget targets;
 
-      toolchain = (pkgs.rust-bin.stable.latest.default.override { inherit targets; });
       execSufficForTarget = target: if lib.strings.hasInfix "windows" target then ".exe" else "";
       artifactForTarget = target: "palantir${execSufficForTarget target}";
       assetNameForTarget = target: "palantir-${builtins.replaceStrings ["-unknown" "-gnu" "-musl" "abihf" "-pc"] ["" "" "" "" ""] target}${execSufficForTarget target}";
 
-      crossArgs = {
-        "armv7-unknown-linux-musleabihf" = {
-          nativeBuildInputs = [ pkgs.pkgsCross.armv7l-hf-multiplatform.stdenv.cc ];
-          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_RUSTFLAGS = "-C target-feature=+crt-static";
-          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER = "${pkgs.pkgsCross.armv7l-hf-multiplatform.stdenv.cc.targetPrefix}cc";
-        };
-        "aarch64-unknown-linux-musl" = {
-          nativeBuildInputs = [ pkgs.pkgsCross.aarch64-multiplatform-musl.stdenv.cc ];
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS = "-C target-feature=+crt-static";
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER = "${pkgs.pkgsCross.aarch64-multiplatform-musl.stdenv.cc.targetPrefix}cc";
-        };
-        "i686-unknown-linux-musl" = {
-          nativeBuildInputs = [ pkgs.pkgsCross.musl32.stdenv.cc ];
-          CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_RUSTFLAGS = "-C target-feature=+crt-static";
-          CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_LINKER = "${pkgs.pkgsCross.musl32.stdenv.cc.targetPrefix}cc";
-        };
-      };
-
-      mingw_w64_cc = pkgs.pkgsCross.mingwW64.stdenv.cc;
-      windows = pkgs.pkgsCross.mingwW64.windows;
-
-      naersk' = pkgs.callPackage naersk {
-        cargo = toolchain;
-        rustc = toolchain;
-      };
+      cross-naersk' = pkgs.callPackage cross-naersk {inherit naersk;};
 
       addUdev = ''
         mkdir -p $out/lib/udev/rules.d/
@@ -84,37 +56,19 @@
       nearskOpt = {
         pname = "palantir";
         root = src;
-      };
 
-      buildWindows = target: naersk'.buildPackage (nearskOpt // {
-        strictDeps = true;
-        depsBuildBuild = with pkgs; [
-          mingw_w64_cc
-        ];
-        nativeBuildInputs = [ mingw_w64_cc ];
-        # only add pthreads when building the final package, not when building the dependencies
-        # otherwise it interferes with building build scripts
-        overrideMain = args: args // { buildInputs = [ windows.pthreads ]; };
-
-        CARGO_BUILD_TARGET = target;
-      });
-
-      buildLinux = target: naersk'.buildPackage (nearskOpt // {
         postInstall = addUdev;
-
-        CARGO_BUILD_TARGET = target;
-      } // (if (hostTarget != target) then (crossArgs.${target} or {}) else {}));
-      buildAny = target: if (nixpkgs.lib.strings.hasInfix "windows" target) then (buildWindows target) else (buildLinux target);
+      };
+      buildTarget = target: (cross-naersk' target).buildPackage nearskOpt;
+      hostNaersk = (cross-naersk' hostTarget);
     in rec {
       # `nix build`
-      packages = nixpkgs.lib.attrsets.genAttrs targets buildAny // rec {
-        palantir = naersk'.buildPackage (nearskOpt // {
-          postInstall = addUdev;
-        });
-        check = naersk'.buildPackage (nearskOpt // {
+      packages = nixpkgs.lib.attrsets.genAttrs targets buildTarget // rec {
+        palantir = packages.${hostTarget};
+        check = hostNaersk.buildPackage (nearskOpt // {
           mode = "check";
         });
-        clippy = naersk'.buildPackage (nearskOpt // {
+        clippy = hostNaersk.buildPackage (nearskOpt // {
           mode = "clippy";
         });
         default = palantir;
@@ -137,15 +91,9 @@
       # `nix develop`
       devShells.default = pkgs.mkShell {
         nativeBuildInputs = with pkgs; [
-          toolchain
+          pkgs.rust-bin.stable.latest.default
           bacon
-          mingw_w64_cc
         ];
-        depsBuildBuild = [ pkgs.wine64 ];
-#        buildInputs = [ windows.pthreads ];
-
-        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "${mingw_w64_cc.targetPrefix}cc";
-        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = "wine64";
       };
     })
     // {
