@@ -39,9 +39,8 @@
 
       releaseTargets = lib.lists.remove hostTarget targets;
 
-      execSufficForTarget = target: if lib.strings.hasInfix "windows" target then ".exe" else "";
-      artifactForTarget = target: "palantir${execSufficForTarget target}";
-      assetNameForTarget = target: "palantir-${builtins.replaceStrings ["-unknown" "-gnu" "-musl" "abihf" "-pc"] ["" "" "" "" ""] target}${execSufficForTarget target}";
+      artifactForTarget = target: "palantir${cross-naersk'.execSufficForTarget target}";
+      assetNameForTarget = target: "palantir-${builtins.replaceStrings ["-unknown" "-gnu" "-musl" "abihf" "-pc"] ["" "" "" "" ""] target}${cross-naersk'.execSufficForTarget target}";
 
       cross-naersk' = pkgs.callPackage cross-naersk {inherit naersk;};
 
@@ -59,8 +58,8 @@
 
         postInstall = addUdev;
       };
-      buildTarget = target: (cross-naersk' target).buildPackage nearskOpt;
-      hostNaersk = (cross-naersk' hostTarget);
+      buildTarget = target: (cross-naersk'.buildPackage target) nearskOpt;
+      hostNaersk = cross-naersk'.hostNaersk;
     in rec {
       # `nix build`
       packages = nixpkgs.lib.attrsets.genAttrs targets buildTarget // rec {
@@ -89,9 +88,8 @@
       };
 
       # `nix develop`
-      devShells.default = pkgs.mkShell {
+      devShells.default = cross-naersk'.mkShell targets {
         nativeBuildInputs = with pkgs; [
-          pkgs.rust-bin.stable.latest.default
           bacon
         ];
       };
