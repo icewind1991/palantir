@@ -1,7 +1,8 @@
 use crate::data::{GpuMemory, GpuUsage};
 use crate::linux::hwmon::FileSource;
 use std::borrow::Cow;
-use std::fs::read_to_string;
+use std::fs::{read_dir, read_to_string};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -60,10 +61,18 @@ fn get_gpu_power_elapsed() -> Option<Duration> {
     elapsed
 }
 
+fn find_gpu_sensor() -> Option<PathBuf> {
+    read_dir("/sys/class/drm/card0/device/hwmon")
+        .ok()?
+        .flatten()
+        .find_map(|hwmon| {
+            let path = hwmon.path().join("power1_average");
+            path.exists().then_some(path)
+        })
+}
+
 pub fn update_gpu_power() {
-    if let Ok(mut file) =
-        FileSource::open("/sys/class/drm/card0/device/hwmon/hwmon0/power1_average")
-    {
+    if let Some(Ok(mut file)) = find_gpu_sensor().map(FileSource::open) {
         loop {
             if let Some(elapsed) = get_gpu_power_elapsed() {
                 let current_power: u64 = match file.read() {
