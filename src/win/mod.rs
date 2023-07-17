@@ -60,14 +60,14 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
         available: system.available_memory(),
         free: system.free_memory(),
     };
-    memory.write(&mut result, &hostname);
+    memory.write(&mut result, hostname);
     for disk in system.disks() {
         let space = DiskUsage {
             name: disk.name().to_string_lossy().into(),
             size: disk.total_space(),
             free: disk.available_space(),
         };
-        space.write(&mut result, &hostname);
+        space.write(&mut result, hostname);
     }
     for (interface, net) in system.networks() {
         let usage = NetStats {
@@ -75,17 +75,17 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
             bytes_received: net.total_received(),
             bytes_sent: net.total_transmitted(),
         };
-        usage.write(&mut result, &hostname);
+        usage.write(&mut result, hostname);
     }
     let cpu = sensors.cpu.lock().unwrap().read()?;
-    cpu.write(&mut result, &hostname);
+    cpu.write(&mut result, hostname);
 
     let gpu_mem_used = WMI.with(|wmi| wmi.gpu_mem())?;
     let gpu_mem = GpuMemory {
         total: sensors.gpu_mem_total,
         free: sensors.gpu_mem_total - gpu_mem_used,
     };
-    gpu_mem.write(&mut result, &hostname);
+    gpu_mem.write(&mut result, hostname);
 
     let gpu_engines = WMI.with(|wmi| wmi.gpu_usage())?;
     for (name, usage) in gpu_engines.into_iter() {
@@ -93,14 +93,15 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
             system: Cow::Owned(name),
             usage,
         };
-        gpu_usage.write(&mut result, &hostname);
+        gpu_usage.write(&mut result, hostname);
     }
     if let Some(disk_usage) = WMI.with(|wmi| wmi.disk_usage())? {
-        disk_usage.write(&mut result, &hostname);
+        disk_usage.write(&mut result, hostname);
     }
     let hwmon_data = WMI.with(|wmi| wmi.hwmon())?;
-    hwmon_data.temperature.write(&mut result, &hostname);
-    hwmon_data.power.write(&mut result, &hostname);
+    hwmon_data.temperature.write(&mut result, hostname);
+    hwmon_data.cpu_power.write(&mut result, hostname);
+    hwmon_data.gpu_power.write(&mut result, hostname);
 
     Ok(result)
 }

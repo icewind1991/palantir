@@ -1,4 +1,4 @@
-use crate::data::{DiskStats, PowerUsage, Temperatures};
+use crate::data::{CpuPowerUsage, DiskStats, GpuPowerUsage, Temperatures};
 use crate::Result;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -53,7 +53,7 @@ impl WmiSensor {
         let mut data = HashMap::default();
 
         for result in results {
-            if let Some(eng_type) = result.name.split("_engtype_").skip(1).next() {
+            if let Some(eng_type) = result.name.split("_engtype_").nth(1) {
                 let entry = data.entry(eng_type.to_string()).or_default();
                 *entry += result.usage;
             }
@@ -105,7 +105,8 @@ impl WmiSensor {
         };
         Ok(HwMonData {
             temperature,
-            power: power(),
+            cpu_power: cpu_power(),
+            gpu_power: gpu_power(),
         })
     }
 }
@@ -121,7 +122,7 @@ struct Sensor {
 }
 
 fn avg_sensors(sensors: &[Sensor], filter: impl Fn(&Sensor) -> bool) -> f32 {
-    let count = sensors.iter().filter(|sensor| filter(*sensor)).count();
+    let count = sensors.iter().filter(|sensor| filter(sensor)).count();
     let total: f32 = sensors
         .iter()
         .filter_map(|sensor| filter(sensor).then_some(sensor.value))
@@ -131,7 +132,8 @@ fn avg_sensors(sensors: &[Sensor], filter: impl Fn(&Sensor) -> bool) -> f32 {
 
 pub struct HwMonData {
     pub temperature: Temperatures,
-    pub power: PowerUsage,
+    pub cpu_power: CpuPowerUsage,
+    pub gpu_power: GpuPowerUsage,
 }
 
 static CPU_POWER_UJ: AtomicU64 = AtomicU64::new(0);
@@ -175,10 +177,15 @@ pub fn update_power() {
     }
 }
 
-pub fn power() -> PowerUsage {
-    PowerUsage {
+pub fn cpu_power() -> CpuPowerUsage {
+    CpuPowerUsage {
         cpu_uj: CPU_POWER_UJ.load(Ordering::SeqCst),
         cpu_packages_uj: Vec::default(),
+    }
+}
+
+pub fn gpu_power() -> GpuPowerUsage {
+    GpuPowerUsage {
         gpu_uj: GPU_POWER_UJ.load(Ordering::SeqCst),
     }
 }
