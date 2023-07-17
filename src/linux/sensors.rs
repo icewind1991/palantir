@@ -41,7 +41,7 @@ impl TemperatureSource {
     }
 }
 
-fn average_sensors(sensors: &mut [FileSource]) -> f32 {
+pub fn average_sensors(sensors: &mut [FileSource]) -> f32 {
     if sensors.is_empty() {
         return 0.0;
     }

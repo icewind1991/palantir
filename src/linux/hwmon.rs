@@ -3,6 +3,7 @@ use std::io;
 use std::io::{ErrorKind, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use tracing::{debug, instrument, warn};
 
 fn read_to_string_trimmed(path: &Path) -> io::Result<String> {
     let mut s = read_to_string(path)?;
@@ -17,10 +18,15 @@ pub struct FileSource {
 }
 
 impl FileSource {
+    #[instrument(skip_all, fields(path = ?path.as_ref()))]
     pub fn open<P: AsRef<Path>>(path: P) -> io::Result<FileSource> {
+        debug!("opening sensor");
         Ok(FileSource {
             buff: String::with_capacity(32),
-            file: File::open(path)?,
+            file: File::open(path).map_err(|e| {
+                warn!("failed to open sensor");
+                e
+            })?,
         })
     }
 

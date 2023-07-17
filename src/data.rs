@@ -184,14 +184,13 @@ impl SensorData for DiskUsage {
 }
 
 #[derive(Debug, Default)]
-pub struct PowerUsage {
+pub struct CpuPowerUsage {
     pub cpu_uj: u64,
     pub cpu_packages_uj: Vec<u64>,
-    pub gpu_uj: u64,
 }
 
-impl PowerUsage {
-    pub fn write<W: Write>(&self, mut w: W, hostname: &str) {
+impl SensorData for CpuPowerUsage {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
         writeln!(
             &mut w,
             r#"total_power{{host="{}", device="cpu"}} {:.3}"#,
@@ -209,6 +208,16 @@ impl PowerUsage {
             )
             .ok();
         }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct GpuPowerUsage {
+    pub gpu_uj: u64,
+}
+
+impl SensorData for GpuPowerUsage {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
         if self.gpu_uj > 0 {
             writeln!(
                 &mut w,

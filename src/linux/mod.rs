@@ -9,7 +9,7 @@ use self::disk::*;
 use self::sensors::*;
 use crate::linux::disk::zfs::arcstats;
 use crate::linux::gpu::{update_gpu_power, utilization};
-use crate::linux::power::power_usage;
+use crate::linux::power::{CpuPowerSource, GpuPowerSource};
 use crate::{hostname, Error, MultiSensorSource, Result, SensorData, SensorSource};
 use std::fmt::Write;
 use std::sync::Mutex;
@@ -29,6 +29,8 @@ pub struct Sensors {
     mem: Mutex<MemorySource>,
     disk_stats: Mutex<DiskStatSource>,
     disk_usage: Mutex<DiskUsageSource>,
+    cpu_power: Mutex<CpuPowerSource>,
+    gpu_power: Mutex<GpuPowerSource>,
 }
 
 impl Sensors {
@@ -43,6 +45,8 @@ impl Sensors {
             mem: Mutex::new(MemorySource::new()?),
             disk_stats: Mutex::new(DiskStatSource::new()?),
             disk_usage: Mutex::new(DiskUsageSource::new()?),
+            cpu_power: Mutex::new(CpuPowerSource::new().unwrap_or_default()),
+            gpu_power: Mutex::new(GpuPowerSource::default()),
         })
     }
 }
@@ -56,6 +60,8 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
     let cpu = sensors.cpu.lock().unwrap().read()?;
     let memory = sensors.mem.lock().unwrap().read()?;
     let temperatures = sensors.temp.lock().unwrap().read()?;
+    let cpu_power = sensors.cpu_power.lock().unwrap().read()?;
+    let gpu_power = sensors.gpu_power.lock().unwrap().read()?;
     let mut net = sensors.net.lock().unwrap();
     let networks = net.read()?;
     let pools = pools();
@@ -99,9 +105,8 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
         }
     }
 
-    if let Some(power) = power_usage()? {
-        power.write(&mut result, &sensors.hostname);
-    }
+    cpu_power.write(&mut result, &sensors.hostname);
+    gpu_power.write(&mut result, &sensors.hostname);
     if let Some(arc) = arcstats()? {
         arc.write(&mut result, &sensors.hostname);
     }

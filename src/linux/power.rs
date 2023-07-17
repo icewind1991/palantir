@@ -1,56 +1,58 @@
-use crate::data::PowerUsage;
+use crate::data::{CpuPowerUsage, GpuPowerUsage};
 use crate::linux::gpu::gpu_power;
-use crate::{Error, Result};
-use std::fs::{read_dir, read_to_string};
-use std::sync::atomic::{AtomicBool, Ordering};
-use tracing::warn;
+use crate::linux::hwmon::FileSource;
+use crate::{Result, SensorSource};
+use std::fs::read_dir;
 
-static CAN_READ: AtomicBool = AtomicBool::new(true);
+#[derive(Default)]
+pub struct CpuPowerSource {
+    sources: Vec<FileSource>,
+}
 
-pub fn power_usage() -> Result<Option<PowerUsage>> {
-    if !CAN_READ.load(Ordering::Relaxed) {
-        return Ok(None);
+impl CpuPowerSource {
+    pub fn new() -> Result<CpuPowerSource> {
+        let sources: Vec<_> = read_dir("/sys/devices/virtual/powercap/intel-rapl")?
+            .flatten()
+            .filter(|path| {
+                path.file_name()
+                    .to_str()
+                    .unwrap_or_default()
+                    .starts_with("intel-rapl")
+            })
+            .map(|entry| {
+                let mut path = entry.path();
+                path.push("energy_uj");
+                path
+            })
+            .flat_map(FileSource::open)
+            .collect();
+
+        Ok(CpuPowerSource { sources })
     }
+}
 
-    let dir = match read_dir("/sys/devices/virtual/powercap/intel-rapl") {
-        Ok(dir) => dir,
-        Err(_) => {
-            CAN_READ.store(false, Ordering::Relaxed);
-            return Ok(None);
-        }
-    };
-    let mut usage = PowerUsage::default();
-    for package in dir {
-        let package = package?;
-        if package
-            .file_name()
-            .to_str()
-            .ok_or_else(|| Error::Other("Invalid name".into()))?
-            .starts_with("intel-rapl")
-        {
-            let mut package_path = package.path();
-            package_path.push("energy_uj");
-            let package_usage = match read_to_string(&package_path) {
-                Err(e) if e.raw_os_error() == Some(13) => {
-                    CAN_READ.store(false, Ordering::Relaxed);
-                    warn!(
-                        package_path = display(package_path.display()),
-                        "can\'t read power usage"
-                    );
-                    return Ok(None);
-                }
-                result => result,
-            }?;
-            let package_usage = package_usage.trim().parse::<u64>()?;
+impl SensorSource for CpuPowerSource {
+    type Data = CpuPowerUsage;
+
+    fn read(&mut self) -> Result<Self::Data> {
+        let mut usage = CpuPowerUsage::default();
+        for source in self.sources.iter_mut() {
+            let package_usage = source.read()?;
             usage.cpu_uj += package_usage;
             usage.cpu_packages_uj.push(package_usage);
         }
+        Ok(usage)
     }
+}
 
-    usage.gpu_uj = gpu_power();
-    if let Some(nvidia_power) = crate::linux::gpu::nvidia::power() {
-        usage.gpu_uj = nvidia_power;
+#[derive(Default)]
+pub struct GpuPowerSource;
+
+impl SensorSource for GpuPowerSource {
+    type Data = GpuPowerUsage;
+
+    fn read(&mut self) -> Result<Self::Data> {
+        let gpu_uj = crate::linux::gpu::nvidia::power().unwrap_or_else(gpu_power);
+        Ok(GpuPowerUsage { gpu_uj })
     }
-
-    Ok(Some(usage))
 }

@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use tracing::{info, warn};
 
 pub mod nvidia;
 
@@ -78,6 +79,7 @@ pub fn update_gpu_power() {
                 let current_power: u64 = match file.read() {
                     Ok(current_power) => current_power,
                     Err(_) => {
+                        warn!("failed to read gpu power sensor");
                         return;
                     }
                 };
@@ -91,6 +93,7 @@ pub fn update_gpu_power() {
             sleep(Duration::from_millis(500));
         }
     }
+    info!("no gpu sensor");
 }
 
 pub fn gpu_power() -> u64 {
