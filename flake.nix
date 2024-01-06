@@ -113,7 +113,7 @@
     })
     // {
       overlays = import ./overlay.nix;
-      modules.default = {
+      nixosModules.default = {
         pkgs,
         config,
         lib,
