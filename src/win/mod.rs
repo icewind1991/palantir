@@ -13,11 +13,14 @@ use os_thread_local::ThreadLocal;
 use std::borrow::Cow;
 use std::sync::Mutex;
 use std::thread::spawn;
-use sysinfo::{ComponentExt, DiskExt, NetworkExt, System, SystemExt};
+use sysinfo::{Components, Disks, Networks, System};
 
 pub struct Sensors {
     pub hostname: String,
     pub system: Mutex<System>,
+    pub networks: Mutex<Networks>,
+    pub components: Mutex<Components>,
+    pub disks: Mutex<Disks>,
     cpu: Mutex<CpuTimeSource>,
     gpu_mem_total: u64,
 }
@@ -28,18 +31,14 @@ static WMI: Lazy<ThreadLocal<WmiSensor>> =
 impl Sensors {
     pub fn new() -> Result<Sensors> {
         spawn(wmi::update_power);
-        let mut system = System::new_all();
-        system.refresh_all();
-        println!("{:?}", system);
-        for component in system.components() {
-            println!("{} :{}°C", component.label(), component.temperature());
-        }
-
         let gpu_mem_total = reg::total_gpu_memory()?;
 
         Ok(Sensors {
             hostname: hostname()?,
-            system: Mutex::new(system),
+            system: Mutex::new(System::new()),
+            networks: Mutex::new(Networks::new_with_refreshed_list()),
+            components: Mutex::new(Components::new_with_refreshed_list()),
+            disks: Mutex::new(Disks::new_with_refreshed_list()),
             cpu: Mutex::new(CpuTimeSource::new()?),
             gpu_mem_total,
         })
@@ -48,9 +47,14 @@ impl Sensors {
 
 pub fn get_metrics(sensors: &Sensors) -> Result<String> {
     let mut system = sensors.system.lock().unwrap();
-    system.refresh_disks();
-    system.refresh_networks();
-    system.refresh_memory();
+    let mut networks = sensors.networks.lock().unwrap();
+    let mut components = sensors.components.lock().unwrap();
+    let mut disks = sensors.disks.lock().unwrap();
+
+    system.refresh_all();
+    networks.refresh();
+    components.refresh();
+    disks.refresh();
 
     let hostname = &sensors.hostname;
     let mut result = String::with_capacity(256);
@@ -61,7 +65,7 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
         free: system.free_memory(),
     };
     memory.write(&mut result, hostname);
-    for disk in system.disks() {
+    for disk in disks.iter() {
         let space = DiskUsage {
             name: disk.name().to_string_lossy().into(),
             size: disk.total_space(),
@@ -69,7 +73,7 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
         };
         space.write(&mut result, hostname);
     }
-    for (interface, net) in system.networks() {
+    for (interface, net) in networks.iter() {
         let usage = NetStats {
             interface: interface.into(),
             bytes_received: net.total_received(),
