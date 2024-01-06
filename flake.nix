@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-23.05";
+    nixpkgs.url = "nixpkgs/nixos-23.11";
     utils.url = "github:numtide/flake-utils";
     naersk.url = "github:nix-community/naersk";
     naersk.inputs.nixpkgs.follows = "nixpkgs";
@@ -28,7 +28,8 @@
       pkgs = import nixpkgs {
         inherit system overlays;
       };
-      lib = pkgs.lib;
+      inherit (pkgs) lib rust-bin callPackage;
+      inherit (builtins) fromTOML readFile map replaceStrings;
 
       hostTarget = pkgs.hostPlatform.config;
       targets = [
@@ -43,11 +44,15 @@
       releaseTargets = lib.lists.remove hostTarget targets;
 
       artifactForTarget = target: "palantir${cross-naersk'.execSufficForTarget target}";
-      assetNameForTarget = target: "palantir-${builtins.replaceStrings ["-unknown" "-gnu" "-musl" "abihf" "-pc"] ["" "" "" "" ""] target}${cross-naersk'.execSufficForTarget target}";
+      assetNameForTarget = target: "palantir-${replaceStrings ["-unknown" "-gnu" "-musl" "abihf" "-pc"] ["" "" "" "" ""] target}${cross-naersk'.execSufficForTarget target}";
 
-      cross-naersk' = pkgs.callPackage cross-naersk {inherit naersk;};
+      cross-naersk' = callPackage cross-naersk {inherit naersk;};
 
       src = lib.sources.sourceByRegex (lib.cleanSource ./.) ["Cargo.*" "(src|benches)(/.*)?"];
+
+      msrv = (fromTOML (readFile ./Cargo.toml)).package.rust-version;
+      toolchain = rust-bin.stable.latest.default;
+      msrvToolchain = rust-bin.stable."${msrv}".default;
 
       nearskOpt = {
         pname = "palantir";
@@ -57,6 +62,10 @@
       };
       buildTarget = target: (cross-naersk'.buildPackage target) nearskOpt;
       hostNaersk = cross-naersk'.hostNaersk;
+      msrvNaersk = callPackage naersk {
+        rustc = msrvToolchain;
+        cargo = msrvToolchain;
+      };
     in rec {
       packages =
         nixpkgs.lib.attrsets.genAttrs targets buildTarget
@@ -69,6 +78,10 @@
           clippy = hostNaersk.buildPackage (nearskOpt
             // {
               mode = "clippy";
+            });
+          msrv = msrvNaersk.buildPackage (nearskOpt
+            // {
+              mode = "check";
             });
           default = palantir;
         };
@@ -92,7 +105,9 @@
       # `nix develop`
       devShells.default = cross-naersk'.mkShell targets {
         nativeBuildInputs = with pkgs; [
+          toolchain
           bacon
+          cargo-msrv
         ];
       };
     })
