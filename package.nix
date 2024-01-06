@@ -9,7 +9,7 @@
 in
   rustPlatform.buildRustPackage rec {
     name = "palantir";
-    version = "0.1.0";
+    version = "1.2.0";
 
     inherit src;
 
