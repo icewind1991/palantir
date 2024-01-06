@@ -5,9 +5,9 @@
   ...
 }:
 with lib; let
-  cfg = config.palantir.services.palantir;
+  cfg = config.services.palantir;
 in {
-  options.palantir.services.palantir = {
+  options.services.palantir = {
     enable = mkEnableOption "Enables the palantir service";
 
     port = mkOption rec {

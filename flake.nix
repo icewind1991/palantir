@@ -86,10 +86,12 @@
           default = palantir;
         };
 
-      apps.palantir = utils.lib.mkApp {
-        drv = packages.palantir;
+      apps = rec {
+        palantir = utils.lib.mkApp {
+          drv = packages.palantir;
+        };
+        default = palantir;
       };
-      defaultApp = apps.palantir;
 
       inherit targets;
       releaseMatrix = {
@@ -112,7 +114,7 @@
       };
     })
     // {
-      overlays = import ./overlay.nix;
+      overlays.default = import ./overlay.nix;
       nixosModules.default = {
         pkgs,
         config,
