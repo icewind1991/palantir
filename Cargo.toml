@@ -35,12 +35,5 @@ wmi = { version = "0.13.1" }
 winreg = { version = "0.52.0", features = ["serialization-serde"] }
 os-thread-local = "0.1.3"
 
-[dev-dependencies]
-iai = "0.1.1"
-
-[[bench]]
-name = "iai"
-harness = false
-
 [profile.release]
 lto = true

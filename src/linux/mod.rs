@@ -46,7 +46,7 @@ impl Sensors {
             disk_stats: Mutex::new(DiskStatSource::new()?),
             disk_usage: Mutex::new(DiskUsageSource::new()?),
             cpu_power: Mutex::new(CpuPowerSource::new().unwrap_or_default()),
-            gpu_power: Mutex::new(GpuPowerSource::default()),
+            gpu_power: Mutex::new(GpuPowerSource),
         })
     }
 }

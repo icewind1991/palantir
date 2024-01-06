@@ -8,7 +8,7 @@ pub mod data;
 pub mod docker;
 
 #[cfg(not(target_os = "windows"))]
-mod linux;
+pub mod linux;
 #[cfg(target_os = "windows")]
 pub mod win;
 
