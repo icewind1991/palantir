@@ -87,7 +87,6 @@ in {
         ExecStart = "${cfg.package}/bin/palantir";
         DynamicUser = true;
         PrivateTmp = true;
-        PrivateUsers = true;
         ProtectSystem = "strict";
         ProtectHome = true;
         NoNewPrivileges = true;
