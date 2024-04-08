@@ -2,6 +2,7 @@ pub mod disk;
 pub mod gpu;
 pub mod hwmon;
 pub mod power;
+mod proc;
 pub mod sensors;
 
 use self::disk::zfs::pools;
@@ -10,6 +11,7 @@ use self::sensors::*;
 use crate::linux::disk::zfs::arcstats;
 use crate::linux::gpu::{update_gpu_power, utilization};
 use crate::linux::power::{CpuPowerSource, GpuPowerSource};
+use crate::linux::proc::ProcSource;
 use crate::{hostname, Error, MultiSensorSource, Result, SensorData, SensorSource};
 use std::fmt::Write;
 use std::sync::Mutex;
@@ -31,6 +33,7 @@ pub struct Sensors {
     disk_usage: Mutex<DiskUsageSource>,
     cpu_power: Mutex<CpuPowerSource>,
     gpu_power: Mutex<GpuPowerSource>,
+    proc: Mutex<ProcSource>,
 }
 
 impl Sensors {
@@ -47,6 +50,7 @@ impl Sensors {
             disk_usage: Mutex::new(DiskUsageSource::new()?),
             cpu_power: Mutex::new(CpuPowerSource::new().unwrap_or_default()),
             gpu_power: Mutex::new(GpuPowerSource),
+            proc: Mutex::new(ProcSource::new()?),
         })
     }
 }
@@ -63,6 +67,7 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
     let cpu_power = sensors.cpu_power.lock().unwrap().read()?;
     let gpu_power = sensors.gpu_power.lock().unwrap().read()?;
     let mut net = sensors.net.lock().unwrap();
+    let mut proc = sensors.proc.lock().unwrap();
     let networks = net.read()?;
     let pools = pools();
     let mut result = String::with_capacity(256);
@@ -116,6 +121,10 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
 
     for usage in utilization() {
         usage.write(&mut result, &sensors.hostname);
+    }
+
+    for process in proc.read()? {
+        process?.write(&mut result, &sensors.hostname);
     }
 
     Ok(result)

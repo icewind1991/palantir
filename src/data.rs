@@ -229,3 +229,28 @@ impl SensorData for GpuPowerUsage {
         }
     }
 }
+
+pub struct ProcData {
+    pub pid: i32,
+    pub name: String,
+    pub rss_memory: u64,
+}
+
+impl SensorData for ProcData {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        writeln!(
+            &mut w,
+            r#"process_memory_rss{{host="{}", process="{}", pid="{}"}} {}"#,
+            hostname, self.name, self.pid, self.rss_memory
+        )
+        .ok();
+    }
+}
+
+impl SensorData for Vec<ProcData> {
+    fn write<W: Write>(&self, mut w: W, hostname: &str) {
+        for data in self {
+            data.write(&mut w, hostname)
+        }
+    }
+}

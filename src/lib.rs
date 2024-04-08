@@ -1,3 +1,4 @@
+use procfs::ProcError;
 use std::ffi::NulError;
 use std::fmt::Write;
 use std::num::{ParseFloatError, ParseIntError};
@@ -35,6 +36,8 @@ pub enum Error {
     InvalidStringData(#[from] Utf8Error),
     #[error(transparent)]
     InvalidCStringData(#[from] NulError),
+    #[error(transparent)]
+    Proc(#[from] ProcError),
     #[error("Failed to query vfs stats")]
     StatVfs,
     #[cfg(target_os = "windows")]
