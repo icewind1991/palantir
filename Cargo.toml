@@ -26,6 +26,8 @@ if-addrs = "0.12.0"
 sysconf = "0.3.4"
 thiserror = "1.0.58"
 clap = { version = "=4.4.18", features = ["derive"] }
+
+[target.'cfg(not(windows))'.dependencies]
 procfs = "0.16.0"
 
 [target.'cfg(windows)'.dependencies]
