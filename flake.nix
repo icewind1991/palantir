@@ -110,6 +110,7 @@
           toolchain
           bacon
           cargo-msrv
+          cargo-edit
         ];
       };
     })

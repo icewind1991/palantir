@@ -16,6 +16,7 @@ use warp::reject::Reject;
 use warp::{Filter, Rejection};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct ReportRejection(Report);
 
 impl From<Report> for ReportRejection {

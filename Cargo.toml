@@ -6,32 +6,32 @@ edition = "2021"
 rust-version = "1.70.0"
 
 [dependencies]
-color-eyre = "0.6.2"
-warp = "0.3.6"
-tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread"] }
-ctrlc = { version = "3.4.2", features = ["termination"] }
+color-eyre = "0.6.3"
+warp = "0.3.7"
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
+ctrlc = { version = "3.4.4", features = ["termination"] }
 dotenvy = "0.15.7"
-regex = { version = "1.10.2", default-features = false, features = ["std"] }
+regex = { version = "1.10.4", default-features = false, features = ["std"] }
 once_cell = "1.19.0"
-hostname = "0.3.1"
-libc = "0.2.151"
-ahash = "0.8.7"
-bollard = "0.15.0"
+hostname = "0.4.0"
+libc = "0.2.153"
+ahash = "0.8.11"
+bollard = "0.16.1"
 futures-util = "0.3.30"
-libmdns = "0.7.5"
+libmdns = "0.8.0"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-nvml-wrapper = "0.9.0"
-if-addrs = "0.11.0"
+nvml-wrapper = "0.10.0"
+if-addrs = "0.12.0"
 sysconf = "0.3.4"
-thiserror = "1.0.56"
-clap = { version = "4.4.13", features = ["derive"] }
+thiserror = "1.0.58"
+clap = { version = "4.4.18", features = ["derive"] }
 
 [target.'cfg(windows)'.dependencies]
-serde = { version = "1.0.195", features = ["derive"] }
-sysinfo = { version = "0.30.5" }
+serde = { version = "1.0.197", features = ["derive"] }
+sysinfo = { version = "0.30.8" }
 winapi = { version = "0.3.9", features = ["sysinfoapi", "processthreadsapi", "powerbase", "minwindef", "winnt", "winbase", "winerror", "impl-default"] }
-wmi = { version = "0.13.1" }
+wmi = { version = "0.13.3" }
 winreg = { version = "0.52.0", features = ["serialization-serde"] }
 os-thread-local = "0.1.3"
 
