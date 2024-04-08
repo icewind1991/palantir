@@ -1,6 +1,6 @@
 # Palantir
 
-System metrics exporter for prometheus
+Opinionated system metrics exporter for prometheus
 
 ## Exported metrics
 
@@ -9,6 +9,7 @@ System metrics exporter for prometheus
 - cpu and gpu temperature
 - cpu and gpu power usage on modern amd and intel platforms
 - docker per-container cpu, memory and network stats
+- per-process memory usage for processes with a memory usage of over 1% 
 
 ## Usage
 

@@ -5,13 +5,14 @@
   lib,
 }: let
   inherit (lib.sources) sourceByRegex;
+  inherit (builtins) fromTOML readFile;
   src = sourceByRegex ./. ["Cargo.*" "(src|benches)(/.*)?"];
+  version = (fromTOML (readFile ./Cargo.toml)).package.version;
 in
   rustPlatform.buildRustPackage rec {
     name = "palantir";
-    version = "1.2.0";
 
-    inherit src;
+    inherit src version;
 
     cargoLock = {
       lockFile = ./Cargo.lock;
