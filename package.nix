@@ -10,7 +10,7 @@
   version = (fromTOML (readFile ./Cargo.toml)).package.version;
 in
   rustPlatform.buildRustPackage rec {
-    name = "palantir";
+    pname = "palantir";
 
     inherit src version;
 
