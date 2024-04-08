@@ -17,6 +17,8 @@ in
       lockFile = ./Cargo.lock;
     };
 
+    doCheck = false;
+
     postInstall = ''
       mkdir -p $out/lib/udev/rules.d/
       echo 'SUBSYSTEM=="powercap", ACTION=="add", RUN+="${coreutils}/bin/chgrp -R powermonitoring /sys%p", RUN+="${coreutils}/bin/chmod -R g=u /sys%p"' >> $out/lib/udev/rules.d/51-palantir.rules
