@@ -17,7 +17,10 @@ impl TemperatureSource {
         let mut gpu_sensors = Vec::new();
 
         for device in Device::list().flatten() {
-            if device.name() == "k10temp" || device.name() == "coretemp" {
+            if device.name() == "k10temp"
+                || device.name() == "coretemp"
+                || device.name() == "soc_thermal"
+            {
                 for sensor in device.sensors().flatten() {
                     if sensor.name() == "Tdie" || sensor.name().starts_with("Core ") {
                         cpu_sensors.push(sensor.reader()?);
@@ -25,7 +28,7 @@ impl TemperatureSource {
                 }
             }
 
-            if device.name() == "amdgpu" {
+            if device.name() == "amdgpu" || device.name() == "gpu_thermal" {
                 for sensor in device.sensors().flatten() {
                     if sensor.name() == "edge" {
                         gpu_sensors.push(sensor.reader()?);

@@ -70,7 +70,8 @@ impl Device {
 
     pub fn sensors(&self) -> impl Iterator<Item = io::Result<Sensor>> {
         // determine early to avoid borrowing &self in iterator
-        let is_cpu_thermal = self.name == "cpu_thermal";
+        let is_cpu_thermal = self.name == "cpu_thermal" || self.name == "soc_thermal";
+        let is_gpu_thermal = self.name == "gpu_thermal";
 
         let sensors = read_dir(&self.base_path).into_iter().flatten();
         sensors
@@ -91,11 +92,17 @@ impl Device {
 
                 let input_name = path.file_name().unwrap().to_str().unwrap();
 
-                // rpi cpu_thermal doesn't have labels, so we hardcode one
+                // rpi/rk3588 cpu_thermal doesn't have labels, so we hardcode one
                 if is_cpu_thermal && input_name == "temp1_input" {
                     return Ok(Sensor {
                         input_path: path,
                         name: "Tdie".into(),
+                    });
+                }
+                if is_gpu_thermal && input_name == "temp1_input" {
+                    return Ok(Sensor {
+                        input_path: path,
+                        name: "edge".into(),
                     });
                 }
 
