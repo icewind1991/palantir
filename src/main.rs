@@ -100,15 +100,17 @@ async fn main() -> Result<()> {
 }
 
 async fn setup_mdns(hostname: String, port: u16) {
-    let interfaces = if_addrs::get_if_addrs().unwrap_or_default();
-    let ip_list: Vec<_> = interfaces
-        .into_iter()
-        .filter(|interface| !interface.name.contains("docker") && !interface.name.contains("br-"))
-        .map(|interface| interface.addr.ip())
-        .collect();
-
     let mdns = loop {
-        match Responder::spawn_with_ip_list(&Handle::current(), ip_list.clone()) {
+        let interfaces = if_addrs::get_if_addrs().unwrap_or_default();
+        let ip_list: Vec<_> = interfaces
+            .into_iter()
+            .filter(|interface| {
+                !interface.name.contains("docker") && !interface.name.contains("br-")
+            })
+            .map(|interface| interface.addr.ip())
+            .collect();
+
+        match Responder::spawn_with_ip_list(&Handle::current(), ip_list) {
             Ok(mdns) => break mdns,
             Err(e) => {
                 warn!(error = display(e), "Failed to register mdns responder");
