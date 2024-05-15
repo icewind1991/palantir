@@ -105,7 +105,9 @@ async fn setup_mdns(hostname: String, port: u16) {
         let ip_list: Vec<_> = interfaces
             .into_iter()
             .filter(|interface| {
-                !interface.name.contains("docker") && !interface.name.contains("br-")
+                !interface.name.contains("docker")
+                    && !interface.name.contains("br-")
+                    && !interface.name.contains("virbr")
             })
             .map(|interface| interface.addr.ip())
             .collect();
