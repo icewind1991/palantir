@@ -68,6 +68,7 @@ in {
 
     systemd.services."palantir" = {
       wantedBy = ["multi-user.target"];
+      after = ["systemd-networkd-wait-online.service"];
       path = lib.optional cfg.zfs pkgs.zfs;
       environment =
         {
