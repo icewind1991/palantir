@@ -114,22 +114,25 @@ impl Iterator for DiskUsageParser<'_> {
     type Item = Result<DiskUsage>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let line = loop {
+        let mount_point = loop {
             let line = self.lines.next()?;
             if line.starts_with('/') && !line.contains("/dev/loop") && !line.contains("fuse") {
-                break line;
+                debug!(line, "picking mount");
+
+                let mut parts = line.split_ascii_whitespace();
+                let disk = parts.next()?;
+                if self.found_disks.insert(hash_str(disk)) {
+                    let mount_point = parts.next()?;
+
+                    break mount_point;
+                } else {
+                    debug!(line, "skipping already processed disk");
+                }
             } else {
                 debug!(line, "skipping mount");
             }
         };
 
-        let mut parts = line.split_ascii_whitespace();
-        let disk = parts.next()?;
-        if !self.found_disks.insert(hash_str(disk)) {
-            debug!(line, "skipping already processed disk");
-            return None;
-        }
-        let mount_point = parts.next()?;
         let stat = match statvfs(mount_point) {
             Ok(stat) => stat,
             Err(e) => {
