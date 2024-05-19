@@ -7,6 +7,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
+use tracing::debug;
 
 pub mod zfs;
 
