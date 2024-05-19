@@ -7,7 +7,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
-use tracing::debug;
+use tracing::{debug, error};
 
 pub mod zfs;
 
@@ -118,18 +118,24 @@ impl Iterator for DiskUsageParser<'_> {
             let line = self.lines.next()?;
             if line.starts_with('/') && !line.contains("/dev/loop") && !line.contains("fuse") {
                 break line;
+            } else {
+                debug!(line, "skipping mount");
             }
         };
 
         let mut parts = line.split_ascii_whitespace();
         let disk = parts.next()?;
         if !self.found_disks.insert(hash_str(disk)) {
+            debug!(line, "skipping already processed disk");
             return None;
         }
         let mount_point = parts.next()?;
         let stat = match statvfs(mount_point) {
             Ok(stat) => stat,
-            Err(e) => return Some(Err(e)),
+            Err(e) => {
+                error!(error = ?e, "error while getting disk statistics");
+                return Some(Err(e));
+            }
         };
         // cast is needed on 32bit platforms
         #[allow(clippy::unnecessary_cast)]
