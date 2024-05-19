@@ -52,6 +52,13 @@ in {
       description = "open mdns port";
     };
 
+    logging = mkOption rec {
+      type = types.str;
+      default = "INFO";
+      example = "WARN";
+      description = "log level";
+    };
+
     package = mkOption {
       type = types.package;
       description = "package to use";
@@ -72,7 +79,8 @@ in {
       path = lib.optional cfg.zfs pkgs.zfs;
       environment =
         {
-          PORT = "${toString cfg.port}";
+          PORT = toString cfg.port;
+          RUST_LOG = cfg.logging;
           LD_LIBRARY_PATH = "/run/opengl-driver/lib/"; # needed for nvidia
         }
         // (
