@@ -155,14 +155,22 @@ fn get_sensor(sensors: &[Sensor], ty: &str, name: &str) -> Option<f32> {
 }
 
 pub fn update_power() {
-    let Ok(com_con) = COMLibrary::new() else {return;};
+    let Ok(com_con) = COMLibrary::new() else {
+        return;
+    };
     if let Ok(wmi_con) = WMIConnection::with_namespace_path("ROOT\\LibreHardwareMonitor", com_con) {
         loop {
             if let Some(elapsed) = get_power_elapsed() {
-                let Ok(sensors) = wmi_con.query::<Sensor>() else {return;};
+                let Ok(sensors) = wmi_con.query::<Sensor>() else {
+                    return;
+                };
                 let sensors: Vec<Sensor> = sensors;
-                let Some(cpu_current_power) = get_sensor(&sensors, "Power", "CPU Package") else {return;};
-                let Some(gpu_current_power) = get_sensor(&sensors, "Power", "GPU Package") else {return;};
+                let Some(cpu_current_power) = get_sensor(&sensors, "Power", "CPU Package") else {
+                    return;
+                };
+                let Some(gpu_current_power) = get_sensor(&sensors, "Power", "GPU Package") else {
+                    return;
+                };
 
                 let elapsed_sec = elapsed.as_secs_f32();
 

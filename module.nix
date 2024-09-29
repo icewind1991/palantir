@@ -1,12 +1,12 @@
-{
-  config,
-  lib,
-  pkgs,
-  ...
+{ config
+, lib
+, pkgs
+, ...
 }:
 with lib; let
   cfg = config.services.palantir;
-in {
+in
+{
   options.services.palantir = {
     enable = mkEnableOption "Enables the palantir service";
 
@@ -69,13 +69,13 @@ in {
     networking.firewall.allowedTCPPorts = lib.optional cfg.openPort cfg.port;
     networking.firewall.allowedUDPPorts = lib.optional cfg.openMDNSPort 5353;
 
-    users.groups.powermonitoring = {};
+    users.groups.powermonitoring = { };
 
-    services.udev.packages = [cfg.package];
+    services.udev.packages = [ cfg.package ];
 
     systemd.services."palantir" = {
-      wantedBy = ["multi-user.target"];
-      after = ["systemd-networkd-wait-online.service"];
+      wantedBy = [ "multi-user.target" ];
+      after = [ "systemd-networkd-wait-online.service" ];
       path = lib.optional cfg.zfs pkgs.zfs;
       environment =
         {
@@ -88,7 +88,7 @@ in {
           then {
             DISABLE_MDNS = "true";
           }
-          else {}
+          else { }
         );
 
       serviceConfig = {
@@ -110,12 +110,12 @@ in {
         ProtectHostname = true;
         LockPersonality = true;
         ProtectKernelTunables = true;
-        RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_NETLINK"] ++ lib.optional cfg.docker "AF_UNIX"; # netlink is required to make `getifaddrs` not err
+        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_NETLINK" ] ++ lib.optional cfg.docker "AF_UNIX"; # netlink is required to make `getifaddrs` not err
         RestrictRealtime = true;
-        SystemCallFilter = ["@system-service" "~@resources" "~@privileged"];
-        IPAddressAllow = ["localhost"] ++ lib.optional cfg.mdns "multicast";
+        SystemCallFilter = [ "@system-service" "~@resources" "~@privileged" ];
+        IPAddressAllow = [ "localhost" ] ++ lib.optional cfg.mdns "multicast";
         UMask = "0077";
-        SupplementaryGroups = ["powermonitoring"] ++ lib.optional cfg.docker "docker";
+        SupplementaryGroups = [ "powermonitoring" ] ++ lib.optional cfg.docker "docker";
       };
     };
   };

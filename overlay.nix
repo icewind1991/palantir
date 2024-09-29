@@ -1,3 +1,3 @@
 final: prev: {
-  palantir = final.callPackage ./package.nix {};
+  palantir = final.callPackage ./package.nix { };
 }

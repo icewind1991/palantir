@@ -9,7 +9,7 @@ Opinionated system metrics exporter for prometheus
 - cpu and gpu temperature
 - cpu and gpu power usage on modern amd and intel platforms
 - docker per-container cpu, memory and network stats
-- per-process memory usage for processes with a memory usage of over 1% 
+- per-process memory usage for processes with a memory usage of over 1%
 
 ## Usage
 
@@ -27,25 +27,26 @@ In recent kernel versions, precise power monitoring is only accessible to root u
 In order to get the power monitoring output you'll need to give the `palantir` user access to this data using the following steps.
 
 - Create a group using
-  
+
   ```bash
   sudo groupadd powermonitoring
   ```
 
 - Create `/etc/udev/rules.d/99-powermonitoring.rules` with
+
   ```udev
   SUBSYSTEM=="powercap", ACTION=="add", RUN+="/bin/chgrp -R powermonitoring /sys%p", RUN+="/bin/chmod -R g=u /sys%p"
   SUBSYSTEM=="powercap", ACTION=="change", ENV{TRIGGER}!="none", RUN+="/bin/chgrp -R powermonitoring /sys%p", RUN+="/bin/chmod -R g=u /sys%p"
   ```
 
 - Apply the udev rules
-  
+
   ```
   sudo udevadm control --reload-rules && sudo udevadm trigger
   ```
 
 - Add your user to the group
-  
+
   ```
   sudo usermod -a -G powermonitoring palantir
   ```
