@@ -21,8 +21,8 @@ pub use win::{get_metrics, Sensors};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
+    #[error("{1}: {0}")]
+    Io(std::io::Error, &'static str),
     #[error("{1}: {0}")]
     Os(std::io::Error, &'static str),
     #[error("{0}")]
@@ -55,6 +55,10 @@ impl Error {
         let err = std::io::Error::last_os_error();
         Error::Os(err, context)
     }
+
+    pub fn io(context: &'static str, err: std::io::Error) -> Error {
+        Error::Io(err, context)
+    }
 }
 
 impl From<FromUtf8Error> for Error {
@@ -86,7 +90,18 @@ pub trait MultiSensorSource {
 }
 
 pub fn hostname() -> Result<String> {
-    hostname::get()?
+    hostname::get()
+        .context("error getting hostname")?
         .into_string()
         .map_err(|_| Error::InvalidHostName)
+}
+
+pub trait IoResultExt<T> {
+    fn context(self, context: &'static str) -> Result<T, Error>;
+}
+
+impl<T> IoResultExt<T> for Result<T, std::io::Error> {
+    fn context(self, context: &'static str) -> Result<T, Error> {
+        self.map_err(|e| Error::io(context, e))
+    }
 }

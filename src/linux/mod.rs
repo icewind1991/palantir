@@ -112,7 +112,7 @@ pub fn get_metrics(sensors: &Sensors) -> Result<String> {
 
     cpu_power.write(&mut result, &sensors.hostname);
     gpu_power.write(&mut result, &sensors.hostname);
-    if let Some(arc) = arcstats()? {
+    if let Some(arc) = arcstats() {
         arc.write(&mut result, &sensors.hostname);
     }
     if let Some(memory) = gpu::memory() {

@@ -1,5 +1,5 @@
 use crate::data::{DiskStats, DiskUsage};
-use crate::{Error, MultiSensorSource, Result};
+use crate::{Error, IoResultExt, MultiSensorSource, Result};
 use ahash::{AHashSet, AHasher};
 use regex::Regex;
 use std::ffi::CString;
@@ -20,7 +20,7 @@ pub struct DiskStatSource {
 impl DiskStatSource {
     pub fn new() -> Result<DiskStatSource> {
         Ok(DiskStatSource {
-            source: File::open("/proc/diskstats")?,
+            source: File::open("/proc/diskstats").context("error getting disk stats")?,
             buff: String::new(),
             regex: Regex::new(r" ([sv]d[a-z]+|nvme[0-9]n[0-9]|mmcblk[0-9]) ").unwrap(),
         })
@@ -33,8 +33,10 @@ impl MultiSensorSource for DiskStatSource {
 
     fn read(&mut self) -> Result<Self::Iter<'_>> {
         self.buff.clear();
-        self.source.rewind()?;
-        self.source.read_to_string(&mut self.buff)?;
+        self.source.rewind().context("error rewinding disk stats")?;
+        self.source
+            .read_to_string(&mut self.buff)
+            .context("error reading disk stats")?;
 
         Ok(DiskStatParser {
             lines: self.buff.lines(),
@@ -83,7 +85,7 @@ pub struct DiskUsageSource {
 impl DiskUsageSource {
     pub fn new() -> Result<DiskUsageSource> {
         Ok(DiskUsageSource {
-            source: File::open("/proc/mounts")?,
+            source: File::open("/proc/mounts").context("error opening mounts")?,
             buff: String::new(),
         })
     }
@@ -95,8 +97,10 @@ impl MultiSensorSource for DiskUsageSource {
 
     fn read(&mut self) -> Result<Self::Iter<'_>> {
         self.buff.clear();
-        self.source.rewind()?;
-        self.source.read_to_string(&mut self.buff)?;
+        self.source.rewind().context("error rewinding mounts")?;
+        self.source
+            .read_to_string(&mut self.buff)
+            .context("error reading mounts")?;
 
         Ok(DiskUsageParser {
             lines: self.buff.lines(),

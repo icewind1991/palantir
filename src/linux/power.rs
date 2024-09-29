@@ -1,7 +1,7 @@
 use crate::data::{CpuPowerUsage, GpuPowerUsage};
 use crate::linux::gpu::gpu_power;
 use crate::linux::hwmon::FileSource;
-use crate::{Result, SensorSource};
+use crate::{IoResultExt, Result, SensorSource};
 use std::fs::read_dir;
 
 #[derive(Default)]
@@ -11,7 +11,8 @@ pub struct CpuPowerSource {
 
 impl CpuPowerSource {
     pub fn new() -> Result<CpuPowerSource> {
-        let sources: Vec<_> = read_dir("/sys/devices/virtual/powercap/intel-rapl")?
+        let sources: Vec<_> = read_dir("/sys/devices/virtual/powercap/intel-rapl")
+            .context("error listing power devices")?
             .flatten()
             .filter(|path| {
                 path.file_name()
@@ -37,7 +38,7 @@ impl SensorSource for CpuPowerSource {
     fn read(&mut self) -> Result<Self::Data> {
         let mut usage = CpuPowerUsage::default();
         for source in self.sources.iter_mut() {
-            let package_usage = source.read()?;
+            let package_usage = source.read().context("error reading power source")?;
             usage.cpu_uj += package_usage;
             usage.cpu_packages_uj.push(package_usage);
         }

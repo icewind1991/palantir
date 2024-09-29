@@ -1,5 +1,5 @@
 use crate::linux::disk::DiskUsage;
-use crate::Result;
+use crate::{IoResultExt, Result};
 use std::fmt::Write;
 use std::fs::read_to_string;
 use std::process::Command;
@@ -23,7 +23,7 @@ pub fn pools() -> impl Iterator<Item = DiskUsage> {
 fn zpool_command() -> Result<String> {
     let mut z = Command::new("zpool");
     z.args(["list", "-p", "-H", "-o", "name,size,free"]);
-    let out = z.output()?;
+    let out = z.output().context("error getting zpool list")?;
     if out.status.success() {
         Ok(String::from_utf8(out.stdout)?)
     } else {
@@ -111,10 +111,10 @@ impl ArcStats {
     }
 }
 
-pub fn arcstats() -> Result<Option<ArcStats>> {
+pub fn arcstats() -> Option<ArcStats> {
     let content = match read_to_string("/proc/spl/kstat/zfs/arcstats") {
         Ok(c) => c,
-        Err(_) => return Ok(None),
+        Err(_) => return None,
     };
     let mut stats = ArcStats::default();
 
@@ -150,5 +150,5 @@ pub fn arcstats() -> Result<Option<ArcStats>> {
         }
     }
 
-    Ok(Some(stats))
+    Some(stats)
 }

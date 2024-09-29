@@ -1,6 +1,6 @@
 use crate::data::{CpuTime, Memory, NetStats, Temperatures};
 use crate::linux::hwmon::{Device, FileSource};
-use crate::{Error, MultiSensorSource, Result, SensorSource};
+use crate::{Error, IoResultExt, MultiSensorSource, Result, SensorSource};
 use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek};
@@ -23,7 +23,7 @@ impl TemperatureSource {
             {
                 for sensor in device.sensors().flatten() {
                     if sensor.name() == "Tdie" || sensor.name().starts_with("Core ") {
-                        cpu_sensors.push(sensor.reader()?);
+                        cpu_sensors.push(sensor.reader().context("error opening cpu temp sensor")?);
                     }
                 }
             }
@@ -31,7 +31,7 @@ impl TemperatureSource {
             if device.name() == "amdgpu" || device.name() == "gpu_thermal" {
                 for sensor in device.sensors().flatten() {
                     if sensor.name() == "edge" {
-                        gpu_sensors.push(sensor.reader()?);
+                        gpu_sensors.push(sensor.reader().context("error opening gpu temp sensor")?);
                     }
                 }
             }
@@ -85,7 +85,7 @@ pub struct MemorySource {
 impl MemorySource {
     pub fn new() -> Result<MemorySource> {
         Ok(MemorySource {
-            source: File::open("/proc/meminfo")?,
+            source: File::open("/proc/meminfo").context("error opening meminfo")?,
             buff: String::new(),
         })
     }
@@ -96,8 +96,10 @@ impl SensorSource for MemorySource {
 
     fn read(&mut self) -> Result<Self::Data> {
         self.buff.clear();
-        self.source.rewind()?;
-        self.source.read_to_string(&mut self.buff)?;
+        self.source.rewind().context("error rewdinging meminfo")?;
+        self.source
+            .read_to_string(&mut self.buff)
+            .context("error reading meminfo")?;
 
         let mut mem = Memory::default();
         for line in self.buff.lines() {
@@ -127,7 +129,7 @@ pub struct CpuTimeSource {
 impl CpuTimeSource {
     pub fn new() -> Result<CpuTimeSource> {
         Ok(CpuTimeSource {
-            source: BufReader::new(File::open("/proc/stat")?),
+            source: BufReader::new(File::open("/proc/stat").context("error opening proc stats")?),
             buff: Vec::new(),
             cpu_count: sysconf(SysconfVariable::ScNprocessorsOnln)? as f32,
         })
@@ -139,9 +141,11 @@ impl SensorSource for CpuTimeSource {
 
     fn read(&mut self) -> Result<Self::Data> {
         self.buff.clear();
-        self.source.rewind()?;
+        self.source.rewind().context("error rewinding proc")?;
 
-        self.source.read_until(b'\n', &mut self.buff)?;
+        self.source
+            .read_until(b'\n', &mut self.buff)
+            .context("error reading proc")?;
 
         let line = std::str::from_utf8(&self.buff)?;
 
@@ -156,7 +160,10 @@ impl SensorSource for CpuTimeSource {
                 (user + system) / (clock_ticks as f32) / self.cpu_count,
             ))
         } else {
-            Err(io::Error::from(ErrorKind::InvalidData).into())
+            Err(Error::io(
+                "invalid proc data",
+                io::Error::from(ErrorKind::InvalidData),
+            ))
         }
     }
 }
@@ -169,7 +176,7 @@ pub struct NetworkSource {
 impl NetworkSource {
     pub fn new() -> Result<NetworkSource> {
         Ok(NetworkSource {
-            source: File::open("/proc/net/dev")?,
+            source: File::open("/proc/net/dev").context("error opening netdev")?,
             buff: String::new(),
         })
     }
@@ -205,7 +212,10 @@ impl NetworkSource {
                 bytes_received: bytes_received.parse()?,
             })
         } else {
-            Err(Error::Io(ErrorKind::InvalidData.into()))
+            Err(Error::io(
+                "error reading netdev",
+                ErrorKind::InvalidData.into(),
+            ))
         }
     }
 }
@@ -216,8 +226,10 @@ impl MultiSensorSource for NetworkSource {
 
     fn read(&mut self) -> Result<Self::Iter<'_>> {
         self.buff.clear();
-        self.source.rewind()?;
-        self.source.read_to_string(&mut self.buff)?;
+        self.source.rewind().context("error rewinding netdev")?;
+        self.source
+            .read_to_string(&mut self.buff)
+            .context("error reading netdev")?;
 
         Ok(NetworkStatParser {
             lines: self.buff.lines(),
