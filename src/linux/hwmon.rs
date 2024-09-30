@@ -13,6 +13,7 @@ fn read_to_string_trimmed(path: &Path) -> io::Result<String> {
 }
 
 pub struct FileSource {
+    path: PathBuf,
     buff: String,
     file: File,
 }
@@ -20,17 +21,37 @@ pub struct FileSource {
 impl FileSource {
     #[instrument(skip_all, fields(path = ?path.as_ref()))]
     pub fn open<P: AsRef<Path>>(path: P) -> io::Result<FileSource> {
+        let path = path.as_ref();
         debug!("opening sensor");
         Ok(FileSource {
+            path: path.into(),
             buff: String::with_capacity(32),
             file: File::open(path).map_err(|e| {
-                warn!("failed to open sensor");
+                warn!("failed to open sensor {}", path.display());
                 e
             })?,
         })
     }
 
     pub fn read<T>(&mut self) -> io::Result<T>
+    where
+        T: FromStr,
+        <T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
+    {
+        match self.try_read() {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                warn!(
+                    "failed to read sensor {}: {e:#}, reopening",
+                    self.path.display()
+                );
+                self.reopen()?;
+                self.try_read()
+            }
+        }
+    }
+
+    fn try_read<T>(&mut self) -> io::Result<T>
     where
         T: FromStr,
         <T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
@@ -42,6 +63,14 @@ impl FileSource {
             .trim()
             .parse()
             .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))
+    }
+
+    pub fn reopen(&mut self) -> io::Result<()> {
+        self.file = File::open(&self.path).map_err(|e| {
+            warn!("failed to open sensor {}", self.path.display());
+            e
+        })?;
+        Ok(())
     }
 }
 
