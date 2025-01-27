@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
             .ok()
             .map(|port| port.parse())
             .transpose()?
-            .unwrap_or(80),
+            .unwrap_or(5665),
     };
 
     let mdns = dotenvy::var("DISABLE_MDNS").is_ok();
