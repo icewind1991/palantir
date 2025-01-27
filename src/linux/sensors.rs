@@ -19,6 +19,7 @@ impl TemperatureSource {
         for device in Device::list().flatten() {
             if device.name() == "k10temp"
                 || device.name() == "coretemp"
+                || device.name() == "cpu_thermal"
                 || device.name() == "soc_thermal"
             {
                 for sensor in device.sensors().flatten() {
