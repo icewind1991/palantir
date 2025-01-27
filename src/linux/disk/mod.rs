@@ -120,7 +120,11 @@ impl Iterator for DiskUsageParser<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         let mount_point = loop {
             let line = self.lines.next()?;
-            if line.starts_with('/') && !line.contains("/dev/loop") && !line.contains("fuse") {
+            if line.starts_with('/')
+                && !line.contains("/dev/loop")
+                && !line.contains("fuse")
+                && !line.contains("squashfs")
+            {
                 debug!(line, "picking mount");
 
                 let mut parts = line.split_ascii_whitespace();
