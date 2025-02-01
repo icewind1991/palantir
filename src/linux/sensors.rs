@@ -23,7 +23,10 @@ impl TemperatureSource {
                 || device.name() == "soc_thermal"
             {
                 for sensor in device.sensors().flatten() {
-                    if sensor.name() == "Tdie" || sensor.name().starts_with("Core ") {
+                    if sensor.name() == "Tdie"
+                        || sensor.name().starts_with("Tccd")
+                        || sensor.name().starts_with("Core ")
+                    {
                         cpu_sensors.push(sensor.reader().context("error opening cpu temp sensor")?);
                     }
                 }
