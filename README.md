@@ -1,3 +1,5 @@
+# Moved to https://codeberg.org/icewind/palantir
+
 # Palantir
 
 Opinionated system metrics exporter for prometheus
